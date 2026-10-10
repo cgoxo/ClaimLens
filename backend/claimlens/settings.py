@@ -1,9 +1,8 @@
-import re
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -30,17 +29,9 @@ class Settings(BaseSettings):
     docai_location: str = "us"
     docai_processor: str | None = None
 
-    allowed_emails: Annotated[list[str], NoDecode] = []
     max_file_mb: int = 20
     max_pages: int = 60
     daily_case_limit: int = 20
-
-    @field_validator("allowed_emails", mode="before")
-    @classmethod
-    def _split_emails(cls, v):
-        if isinstance(v, str):
-            v = re.split(r"[;,]", v)
-        return [e.strip().lower() for e in v if e and e.strip()]
 
     @model_validator(mode="after")
     def _check(self):

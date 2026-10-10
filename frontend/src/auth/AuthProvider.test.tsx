@@ -85,9 +85,9 @@ test("login page in dev mode has an email field and Enter", async () => {
   await waitFor(() => expect(localStorage.getItem("claimlens.devUser")).toBe("a@x.com"));
 });
 
-test("login page explains a forbidden account", async () => {
+test("login page explains a refused account", async () => {
   fetchMock.mockImplementation(async () => json(403, { detail: "nope" }));
   localStorage.setItem("claimlens.devUser", "b@x.com");
   renderLogin();
-  expect(await screen.findByText(/isn't on the ClaimLens list/)).toBeInTheDocument();
+  expect(await screen.findByText(/its email isn't verified/)).toBeInTheDocument();
 });

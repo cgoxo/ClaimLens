@@ -23,7 +23,7 @@ export function AuthProvider({ children, mode = (import.meta.env.VITE_AUTH_MODE 
   children: ReactNode;
   mode?: Mode;
 }) {
-  const [status, setStatus] = useState<Status>("loading");
+  const [status, setStatus] = useState<Status>("loading"); // forbidden = backend refused the account (unverified email)
   const [email, setEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const emailRef = useRef<string | null>(null);

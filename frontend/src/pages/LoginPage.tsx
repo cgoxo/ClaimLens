@@ -34,8 +34,8 @@ export default function LoginPage() {
         {auth.status === "forbidden" ? (
           <div className="cover-alert" role="alert">
             <p>
-              <strong>{auth.email}</strong> isn't on the ClaimLens list. Ask the owner to add it, or sign in with
-              another account.
+              <strong>{auth.email}</strong> can't be used here: its email isn't verified. Sign in with a Google
+              account instead.
             </p>
             <button className="btn btn-quiet" onClick={() => void auth.signOut()}>Sign out</button>
           </div>

@@ -22,9 +22,6 @@ docker-build:
 PROJECT ?= social-pulse-510513
 REGION ?= asia-south1
 SERVICE ?= claimlens-api
-# who may sign in: kept out of git (backend/.env.deploy locally, a GitHub secret in CI)
--include .env.deploy
-ALLOWED_EMAILS ?=
 TF = terraform -chdir=infra
 
 infra-plan:
@@ -32,14 +29,13 @@ infra-plan:
 infra-apply:
 	$(TF) apply -input=false tfplan
 deploy:
-	@test -n "$(ALLOWED_EMAILS)" || (echo 'Set ALLOWED_EMAILS in backend/.env.deploy (see .env.deploy.example)'; exit 1)
 	$(eval REG := $(shell $(TF) output -raw registry))
 	$(eval TAG := $(shell git rev-parse --short HEAD))
 	gcloud builds submit --project $(PROJECT) --region $(REGION) --tag $(REG)/$(SERVICE):$(TAG) ..
 	gcloud run deploy $(SERVICE) --project $(PROJECT) --region $(REGION) --image $(REG)/$(SERVICE):$(TAG) \
 	  --service-account $(shell $(TF) output -raw service_account_email) --allow-unauthenticated \
 	  --cpu 1 --memory 1Gi --timeout 300 --no-cpu-throttling --min-instances 0 --max-instances 2 \
-	  --set-env-vars "^##^APP_ENV=prod##STORAGE=gcs##DB=firestore##AI=vertex##OCR=docai##AUTH_MODE=firebase##GCP_PROJECT=$(PROJECT)##BUCKET=$(shell $(TF) output -raw bucket)##FIRESTORE_DB=claimlens##GEMINI_MODEL=gemini-2.5-flash##VERTEX_LOCATION=global##DOCAI_LOCATION=us##DOCAI_PROCESSOR=$(shell $(TF) output -raw docai_processor_id)##ALLOWED_EMAILS=$(ALLOWED_EMAILS)"
+	  --set-env-vars "^##^APP_ENV=prod##STORAGE=gcs##DB=firestore##AI=vertex##OCR=docai##AUTH_MODE=firebase##GCP_PROJECT=$(PROJECT)##BUCKET=$(shell $(TF) output -raw bucket)##FIRESTORE_DB=claimlens##GEMINI_MODEL=gemini-2.5-flash##VERTEX_LOCATION=global##DOCAI_LOCATION=us##DOCAI_PROCESSOR=$(shell $(TF) output -raw docai_processor_id)"
 seed-cloud:
 	DB=firestore AI=fake $(PY) scripts/seed_invoices.py
 smoke-cloud:

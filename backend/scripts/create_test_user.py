@@ -23,4 +23,3 @@ if __name__ == "__main__":
         except auth.ConfigurationNotFoundError:
             sys.exit("Email/Password sign-in is not enabled. Firebase console -> Authentication -> Sign-in method.")
         print(f"created {args.email}")
-    print("Add this email to ALLOWED_EMAILS.")

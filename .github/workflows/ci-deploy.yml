@@ -78,14 +78,11 @@ jobs:
           docker push "$IMAGE:${GITHUB_SHA::7}"
 
       - name: Deploy
-        env:
-          ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
         run: |
-          test -n "$ALLOWED_EMAILS" || { echo "::error::Set the ALLOWED_EMAILS repository secret"; exit 1; }
           gcloud run deploy "$SERVICE" --project "$PROJECT" --region "$REGION" \
             --image "$IMAGE:${GITHUB_SHA::7}" --service-account "$RUNTIME_SA" \
             --cpu 1 --memory 1Gi --timeout 300 --no-cpu-throttling --min-instances 0 --max-instances 2 \
-            --set-env-vars "^##^APP_ENV=prod##STORAGE=gcs##DB=firestore##AI=vertex##OCR=docai##AUTH_MODE=firebase##GCP_PROJECT=${PROJECT}##BUCKET=${BUCKET}##FIRESTORE_DB=claimlens##GEMINI_MODEL=gemini-2.5-flash##VERTEX_LOCATION=global##DOCAI_LOCATION=us##DOCAI_PROCESSOR=${DOCAI_PROCESSOR}##ALLOWED_EMAILS=${ALLOWED_EMAILS}"
+            --set-env-vars "^##^APP_ENV=prod##STORAGE=gcs##DB=firestore##AI=vertex##OCR=docai##AUTH_MODE=firebase##GCP_PROJECT=${PROJECT}##BUCKET=${BUCKET}##FIRESTORE_DB=claimlens##GEMINI_MODEL=gemini-2.5-flash##VERTEX_LOCATION=global##DOCAI_LOCATION=us##DOCAI_PROCESSOR=${DOCAI_PROCESSOR}"
 
       - name: Smoke check
         run: |

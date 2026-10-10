@@ -42,7 +42,7 @@ The *Create case* request points at `samples/*.pdf` with absolute paths from you
 | POST | `/api/cases/{id}/findings/{fid}/review` | `{"action": "accept" \| "dismiss", "note"}` |
 
 Auth: `AUTH_MODE=dev` → `X-Dev-User: <email>` header. `AUTH_MODE=firebase` → `Authorization: Bearer <Firebase ID
-token>`, email must be in `ALLOWED_EMAILS`.
+token>`: any Google account (verified email) is let in.
 
 ## Tests
 
@@ -64,7 +64,6 @@ Billing must be enabled on the project. One-time setup:
 make infra-plan                   # Terraform: APIs, Firestore DB "claimlens", bucket, Document AI, service accounts,
 make infra-apply                  # registry, and the GitHub Actions trust (Workload Identity Federation)
 .venv/bin/python scripts/create_test_user.py --password '<pick one>'
-cp .env.deploy.example .env.deploy   # who may sign in (gitignored), then edit
 make deploy                       # build the single image (frontend + API) and deploy Cloud Run claimlens-api
 make auth-domain                  # authorize the Cloud Run hosts for Google sign-in (safe to re-run)
 make seed-cloud                   # past invoice into Firestore
@@ -88,10 +87,12 @@ GitHub signs in to GCP **without a stored key**: Workload Identity Federation (`
 `cgoxo/ClaimLens` on `refs/heads/main`, as the `claimlens-deployer` service account. That account can push to the
 `claimlens` registry, deploy Cloud Run revisions and run them as `claimlens-api`, and nothing else.
 
-Repository secret needed: **`ALLOWED_EMAILS`** (who may sign in, separated by `;`). It is kept out of git because the
-repo is public. Change it with `gh secret set ALLOWED_EMAILS` and re-run the workflow.
+No repository secrets are needed.
 
 ## Who can sign in
 
-`ALLOWED_EMAILS` on the Cloud Run service, set by `make deploy` (from `backend/.env.deploy`) or by CI (from the secret).
-The account must sign in with Google (or be the email/password test user) and have a verified email.
+**Anyone with a Google account.** There is no allow-list: the backend only refuses accounts whose email is not verified
+(for example, self-made email/password accounts). Each person sees only their own cases.
+
+Guards against misuse and cost: 20 cases per person per day (`DAILY_CASE_LIMIT`), files up to 20 MB and 60 pages, and at
+most 2 Cloud Run instances. Setting a budget alert in GCP Billing is recommended.

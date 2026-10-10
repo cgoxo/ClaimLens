@@ -109,12 +109,10 @@ def test_daily_limit_429(settings):
 def test_firebase_mode(settings, monkeypatch):
     import claimlens.auth as auth
 
-    s = settings.model_copy(update={"auth_mode": "firebase", "allowed_emails": ["a@b.com"]})
-    c = _client(s)
+    c = _client(settings.model_copy(update={"auth_mode": "firebase"}))
     assert c.get("/api/me").status_code == 401
-    monkeypatch.setattr(auth, "verify_firebase_token", lambda token, project: {"email": "x@y.com", "email_verified": True})
-    assert c.get("/api/me", headers={"Authorization": "Bearer t"}).status_code == 403
-    monkeypatch.setattr(auth, "verify_firebase_token", lambda token, project: {"email": "A@B.com", "email_verified": True})
-    assert c.get("/api/me", headers={"Authorization": "Bearer t"}).json() == {"email": "a@b.com"}
+    # any Google account with a verified email may sign in: there is no allow-list
+    monkeypatch.setattr(auth, "verify_firebase_token", lambda token, project: {"email": "Anyone@Gmail.com", "email_verified": True})
+    assert c.get("/api/me", headers={"Authorization": "Bearer t"}).json() == {"email": "anyone@gmail.com"}
     monkeypatch.setattr(auth, "verify_firebase_token", lambda token, project: (_ for _ in ()).throw(ValueError("bad")))
     assert c.get("/api/me", headers={"Authorization": "Bearer t"}).status_code == 401

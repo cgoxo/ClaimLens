@@ -21,9 +21,8 @@ def test_dev_auth_refused_in_prod(settings):
         Settings(_env_file=None, app_env="prod", auth_mode="dev")
 
 
-def test_allowed_emails_parsing(settings):
-    s = Settings(_env_file=None, allowed_emails="A@x.com; b@y.com")
-    assert s.allowed_emails == ["a@x.com", "b@y.com"]
+def test_no_allow_list_setting(settings):
+    assert not hasattr(settings, "allowed_emails")
 
 
 def test_health(settings):

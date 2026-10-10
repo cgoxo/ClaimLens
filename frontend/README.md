@@ -29,7 +29,7 @@ npm run build          # type-check + production build into dist/
 
 | Route | Screen |
 | --- | --- |
-| `/login` | Case-file cover: **Sign in with Google** (or dev email). Shows "not on the list" for accounts the backend rejects |
+| `/login` | Case-file cover: **Sign in with Google** (or dev email). Any Google account can sign in |
 | `/` | Two evidence trays (claim: PDF/JPG/PNG, policy: PDF), **Try the sample claim**, and your cases |
 | `/cases/:id` | Progress while running; then the risk stamp, payable amount, summary and findings by severity, with the page viewer. Click a finding (or `j` / `k`) to see it marked on its page; Accept / Dismiss it |
 
@@ -38,7 +38,7 @@ npm run build          # type-check + production build into dist/
 | File | Job |
 | --- | --- |
 | `src/api/client.ts` | All HTTP; adds the auth header; a 401 signs you out; page images fetched once and shown as object URLs |
-| `src/auth/AuthProvider.tsx` | Google (Firebase) or dev sign-in; checks `/api/me` (403 means "not on the list") |
+| `src/auth/AuthProvider.tsx` | Google (Firebase) or dev sign-in; checks `/api/me` (403 means the email isn't verified) |
 | `src/hooks/useCasePolling.ts` | Polls the case every 2 s until READY or FAILED |
 | `src/lib/highlight.ts` | PDF-point boxes to percentages, so markers scale with the page image |
 | `src/components/PageViewer.tsx` | Tabs, page strip, page image and evidence marker (dashed for hidden text, a banner for file properties) |
@@ -48,7 +48,7 @@ npm run build          # type-check + production build into dist/
 | File | Values |
 | --- | --- |
 | `.env.development` | `VITE_AUTH_MODE=dev` |
-| `.env.production` | `VITE_AUTH_MODE=firebase` and the Firebase **web** config (public by design; security comes from sign-in plus the backend allow-list) |
+| `.env.production` | `VITE_AUTH_MODE=firebase` and the Firebase **web** config (public by design; security comes from sign-in and per-user access to cases) |
 
 ## Deploy
 

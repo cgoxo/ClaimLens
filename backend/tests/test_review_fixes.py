@@ -84,7 +84,7 @@ def test_resubmission_by_same_owner_says_so(ctx):
 def test_firebase_requires_verified_email(settings, monkeypatch):
     import claimlens.auth as auth
 
-    app = create_app(settings.model_copy(update={"auth_mode": "firebase", "allowed_emails": ["a@b.com"]}))
+    app = create_app(settings.model_copy(update={"auth_mode": "firebase"}))
     c = TestClient(app)
     monkeypatch.setattr(auth, "verify_firebase_token", lambda t, p: {"email": "a@b.com", "email_verified": False})
     assert c.get("/api/me", headers={"Authorization": "Bearer t"}).status_code == 403

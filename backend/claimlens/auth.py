@@ -30,7 +30,8 @@ def current_user(request: Request) -> str:
         claims = verify_firebase_token(header.removeprefix("Bearer ").strip(), settings.gcp_project)
     except Exception:
         raise HTTPException(401, "Invalid or expired sign-in token")
+    # any Google account may sign in; only unverified emails (e.g. self-made password accounts) are refused
     email = (claims.get("email") or "").lower()
-    if not email or not claims.get("email_verified") or email not in settings.allowed_emails:
-        raise HTTPException(403, "This account is not allowed to use ClaimLens")
+    if not email or not claims.get("email_verified"):
+        raise HTTPException(403, "Sign in with a Google account (verified email)")
     return email
