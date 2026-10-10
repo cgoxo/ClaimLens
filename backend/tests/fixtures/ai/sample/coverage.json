@@ -1,0 +1,8 @@
+[
+  {"item": "Cataract surgery", "verdict": "not_covered", "clause": "3.2", "page": 2,
+   "quote": "not payable until 24 months", "amount_not_payable": 0,
+   "reason": "Cataract has a 24-month waiting period; the policy started on 01-Jan-2026."},
+  {"item": "Room rent", "verdict": "partly_covered", "clause": "2.1", "page": 1,
+   "quote": "Room rent is payable up to 1% of the sum insured per day", "amount_not_payable": 4500,
+   "reason": "Room at Rs 4,500/day is above the Rs 3,000/day limit."}
+]

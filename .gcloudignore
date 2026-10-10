@@ -1,0 +1,19 @@
+.git
+.superpowers
+docs
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+frontend/dist
+frontend/*.tsbuildinfo
+backend/data
+backend/tests
+backend/infra
+backend/postman
+backend/samples
+backend/scripts
+**/.env
+
+# gcloud: also skip the gitignored scratch
+#!include:.gitignore

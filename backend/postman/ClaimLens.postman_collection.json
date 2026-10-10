@@ -1,0 +1,252 @@
+{
+  "info": {
+    "_postman_id": "f0340d61-53bc-5981-bc18-48061cebbdab",
+    "name": "ClaimLens",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "ClaimLens backend. Pick the 'ClaimLens local' or 'ClaimLens cloud' environment. Cloud: run 'Sign in test user' first."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Local: send X-Dev-User. Cloud: send the Firebase ID token from 'Sign in test user'.",
+          "const devUser = pm.environment.get('devUser');",
+          "if (devUser) { pm.request.headers.upsert({key: 'X-Dev-User', value: devUser}); }",
+          "else if (pm.environment.get('idToken')) {",
+          "  pm.request.headers.upsert({key: 'Authorization', value: 'Bearer ' + pm.environment.get('idToken')});",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Sign in test user (cloud only)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={{firebaseApiKey}}",
+          "host": [
+            "https://identitytoolkit.googleapis.com"
+          ],
+          "path": [
+            "v1",
+            "accounts:signInWithPassword?key={{firebaseApiKey}}"
+          ]
+        },
+        "description": "Gets a Firebase ID token for the email/password test user and stores it as idToken.",
+        "body": {
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          },
+          "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"returnSecureToken\": true\n}"
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('signed in', () => pm.response.to.have.status(200));",
+              "pm.environment.set('idToken', pm.response.json().idToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "Me",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "me"
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "Create case (sample claim + policy)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases"
+          ]
+        },
+        "description": "Uploads samples/claim.pdf and samples/policy.pdf. Then run 'Get case' until READY.",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "claim",
+              "type": "file",
+              "src": "/Users/chitresh/Documents/dev/hackii/ClaimLens/backend/samples/claim.pdf"
+            },
+            {
+              "key": "policy",
+              "type": "file",
+              "src": "/Users/chitresh/Documents/dev/hackii/ClaimLens/backend/samples/policy.pdf"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('created', () => pm.response.to.have.status(201));",
+              "pm.environment.set('caseId', pm.response.json().case_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get case",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}"
+          ]
+        },
+        "description": "Poll until status is READY. Stores the first finding's id."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const c = pm.response.json();",
+              "console.log(c.status, c.score, c.risk, (c.findings || []).length + ' findings');",
+              "pm.test('status ' + c.status, () => pm.expect(['QUEUED','READING','CHECKING','PROVING','READY']).to.include(c.status));",
+              "if (c.findings && c.findings.length) { pm.environment.set('findingId', c.findings[0].id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List my cases",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases"
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "Page image (claim p.3)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/pages/claim/3.png",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "pages",
+            "claim",
+            "3.png"
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "Review first finding",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/findings/{{findingId}}/review",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "findings",
+            "{{findingId}}",
+            "review"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          },
+          "raw": "{\n  \"action\": \"accept\",\n  \"note\": \"checked against the bill\"\n}"
+        }
+      }
+    }
+  ]
+}

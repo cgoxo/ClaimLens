@@ -1,0 +1,9 @@
+{
+  "policy_number": {"value": "EH-2025-778812", "page": 1, "quote": "EH-2025-778812"},
+  "start_date": {"value": "01-Jan-2026", "page": 1, "quote": "01-Jan-2026"},
+  "sum_insured": {"value": 300000, "page": 1, "quote": "Rs 3,00,000"},
+  "room_rent_limit_per_day": {"value": 3000, "page": 1, "quote": "Room rent is payable up to 1% of the sum insured per day"},
+  "waiting_periods": [
+    {"condition": "Cataract", "months": 24, "clause": "3.2", "page": 2, "quote": "not payable until 24 months"}
+  ]
+}
