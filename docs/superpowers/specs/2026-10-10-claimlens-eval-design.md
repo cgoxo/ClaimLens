@@ -97,7 +97,7 @@ Forgeries that conflict (for example, `retype_total` and `claimed_mismatch`) are
 ## 6. Targets
 
 - **`LocalTarget`:** builds `Deps` with `STORAGE=local`, `DB=local` (`data/eval/runs/<id>/db`), the real Vertex Gemini and `DocAiOcr` when the suite needs OCR, then calls `run_pipeline` directly. Concurrency is set by `--workers` (default 4).
-- **`LiveTarget`:** signs in the test user through Identity Toolkit `signInWithPassword` (API key from `frontend/.env.production`, password from `backend/data/.tester_password`), then uses `POST /api/cases` and polls `GET /api/cases/{id}`. The token is refreshed after 50 minutes. Concurrency defaults to 3. Seeding duplicates live is not possible from the client, so `reused_invoice` is achieved by submitting the "earlier" case first in the same run.
+- **`LiveTarget`:** signs in the test user through Identity Toolkit `signInWithPassword` (API key from Secret Manager `claimlens-firebase-web-api-key`, password from `backend/data/.tester_password`), then uses `POST /api/cases` and polls `GET /api/cases/{id}`. The token is refreshed after 50 minutes. Concurrency defaults to 3. Seeding duplicates live is not possible from the client, so `reused_invoice` is achieved by submitting the "earlier" case first in the same run.
 - **Backend change:** a new setting `NO_LIMIT_EMAILS` (comma or semicolon separated, empty by default). The daily-limit check is skipped for those emails. The Makefile and CI set it to `claimlens-tester@example.com`.
 
 ## 7. Metrics and report

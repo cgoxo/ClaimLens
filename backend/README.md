@@ -26,7 +26,8 @@ Import the three files in `postman/`, pick an environment:
   until `READY`.
 - **ClaimLens cloud**: fill `testPassword`, run *Sign in test user* (stores `idToken`), then the same requests.
 
-Regenerate after deploying: `make postman URL=https://<run-url> API_KEY=<firebase web api key>`.
+Regenerate after deploying: `make postman URL=https://<run-url>`. The cloud environment's `firebaseApiKey` is left
+blank on purpose: paste it from `gcloud secrets versions access latest --secret claimlens-firebase-web-api-key`.
 The *Create case* request points at `samples/*.pdf` with absolute paths from your machine.
 
 ## API
@@ -67,7 +68,7 @@ make infra-apply                  # registry, and the GitHub Actions trust (Work
 make deploy                       # build the single image (frontend + API) and deploy Cloud Run claimlens-api
 make auth-domain                  # authorize the Cloud Run hosts for Google sign-in (safe to re-run)
 make seed-cloud                   # past invoice into Firestore
-make smoke-cloud PASSWORD='<same>' API_KEY=<firebase web api key>
+make smoke-cloud PASSWORD='<same>'     # reads the Firebase web key from Secret Manager
 ```
 
 The image is built from the **repo root** `Dockerfile`: stage 1 builds `frontend/`, stage 2 installs this package and
@@ -88,6 +89,14 @@ GitHub signs in to GCP **without a stored key**: Workload Identity Federation (`
 `claimlens` registry, deploy Cloud Run revisions and run them as `claimlens-api`, and nothing else.
 
 No repository secrets are needed.
+
+### Firebase web API key
+
+The key lives in **GCP Secret Manager** (`claimlens-firebase-web-api-key`), not in git. CI reads it with its keyless
+login and passes it to the frontend build (`--build-arg VITE_FIREBASE_API_KEY`); `make deploy` does the same through
+`cloudbuild.yaml`. It still ends up in the site's JavaScript (that is how Firebase sign-in works in a browser), so the
+real protection is that the key is **restricted to the sign-in APIs** (`identitytoolkit`, `securetoken`). To rotate it,
+add a new secret version and push to `main`.
 
 ## Who can sign in
 

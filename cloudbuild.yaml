@@ -1,0 +1,11 @@
+# Used by `make deploy`: builds the single image, passing the Firebase web API key from Secret Manager.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args: ["-c", "docker build --build-arg VITE_FIREBASE_API_KEY=\"$$FIREBASE_KEY\" -t ${_IMAGE} ."]
+    secretEnv: ["FIREBASE_KEY"]
+images: ["${_IMAGE}"]
+availableSecrets:
+  secretManager:
+    - versionName: projects/social-pulse-510513/secrets/claimlens-firebase-web-api-key/versions/latest
+      env: FIREBASE_KEY

@@ -48,7 +48,7 @@ npm run build          # type-check + production build into dist/
 | File | Values |
 | --- | --- |
 | `.env.development` | `VITE_AUTH_MODE=dev` |
-| `.env.production` | `VITE_AUTH_MODE=firebase` and the Firebase **web** config (public by design; security comes from sign-in and per-user access to cases) |
+| `.env.production` | `VITE_AUTH_MODE=firebase` and the Firebase project ids. The web **API key** comes from GCP Secret Manager at build time (`VITE_FIREBASE_API_KEY` build arg), not from git |
 
 ## Deploy
 

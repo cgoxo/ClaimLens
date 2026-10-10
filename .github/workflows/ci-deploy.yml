@@ -73,8 +73,10 @@ jobs:
 
       - name: Build and push image (frontend + backend)
         run: |
+          KEY=$(gcloud secrets versions access latest --secret claimlens-firebase-web-api-key --project "$PROJECT")
+          echo "::add-mask::$KEY"
           gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
-          docker build -t "$IMAGE:${GITHUB_SHA::7}" .
+          docker build --build-arg VITE_FIREBASE_API_KEY="$KEY" -t "$IMAGE:${GITHUB_SHA::7}" .
           docker push "$IMAGE:${GITHUB_SHA::7}"
 
       - name: Deploy
