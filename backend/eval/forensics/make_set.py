@@ -20,7 +20,7 @@ OUT = Path(__file__).resolve().parents[2] / "data" / "eval" / "forensics"
 
 
 def _fields(bill, matrix, scale=1.0, edited=()):
-    return [{"name": f.name, "kind": f.kind, "edited": f.name in edited,
+    return [{"name": f.name, "kind": f.kind, "value": f.value, "edited": f.name in edited,
              "box": [v * scale for v in transform_box(f.box, matrix)]} for f in bill.fields]
 
 

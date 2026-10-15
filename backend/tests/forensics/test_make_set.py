@@ -99,3 +99,9 @@ def test_manifest_has_controls_and_one_edited_field_per_forgery(tmp_path):
         edited = [f for f in r["fields"] if f["edited"]]
         assert len(edited) == (0 if r["kind"] == "control" else 2 if r["kind"] == "G3" else 1), r
         assert (tmp_path / r["image"]).is_file()
+
+
+def test_labels_and_values_are_recorded_so_word_level_detectors_have_words():
+    bill = render_bill(4)
+    labels = [f for f in bill.fields if f.kind == "text"]
+    assert len(labels) >= 6 and all(f.value for f in bill.fields)

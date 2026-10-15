@@ -51,25 +51,25 @@ def render_bill(seed: int) -> Bill:
 
     text((120, 110), f"{rng.choice(['Sunrise', 'Lotus', 'Green Valley', 'City Care'])} Hospital", big)
     text((120, 180), "FICTIONAL SAMPLE FOR TESTING", small)
-    text((120, 260), "Invoice:", body)
+    text((120, 260), "Invoice:", body, "label_invoice")
     text((330, 260), f"INV-{seed:05d}-{int(rng.integers(1000, 9999))}", body, "invoice", "invoice")
-    text((120, 310), "Bill date:", body)
+    text((120, 310), "Bill date:", body, "label_date")
     day, month = int(rng.integers(1, 28)), rng.choice(["Jan", "Feb", "Mar", "Apr", "May", "Jun"])
     text((330, 310), f"{day:02d}-{month}-2026", body, "date", "date")
-    text((120, 360), "Patient:", body)
+    text((120, 360), "Patient:", body, "label_patient")
     text((330, 360), f"{rng.choice(FIRST)} {rng.choice(LAST)}", body, "patient")
     names = list(rng.choice(ITEMS, size=int(rng.integers(4, 8)), replace=False))
     y, total = 480, 0
     for i, name in enumerate(names):
         amount = int(rng.integers(5, 400)) * 100
         total += amount
-        text((120, y), name, body)
+        text((120, y), name, body, f"label{i}")
         text((1180, y), money(amount), body, f"item{i}", "amount")
         bill.items.append((f"item{i}", amount))
         y += 60
     bold = bool(rng.random() < 0.4)
     font = ImageFont.load_default(size=36) if bold else body
-    text((120, y + 40), "TOTAL", font)
+    text((120, y + 40), "TOTAL", font, "label_total")
     text((1180, y + 40), money(total), font, "total", "amount")
     if rng.random() < 0.3:  # a rubber stamp over an amount
         x0, y0 = 1120, 470 + 60 * int(rng.integers(0, len(names)))
