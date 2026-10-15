@@ -10,6 +10,7 @@ locals {
     "artifactregistry.googleapis.com",
     "identitytoolkit.googleapis.com",
     "firebase.googleapis.com",
+    "cloudtasks.googleapis.com",
   ]
 }
 

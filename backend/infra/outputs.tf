@@ -21,3 +21,11 @@ output "wif_provider" {
 output "deployer_email" {
   value = google_service_account.deployer.email
 }
+
+output "tasks_queue" {
+  value = google_cloud_tasks_queue.jobs.name
+}
+
+output "tasks_sa_email" {
+  value = google_service_account.tasks.email
+}

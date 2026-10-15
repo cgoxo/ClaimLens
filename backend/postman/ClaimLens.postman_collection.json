@@ -100,7 +100,7 @@
       }
     },
     {
-      "name": "Create case (sample claim + policy)",
+      "name": "1. Create draft case (cards)",
       "request": {
         "method": "POST",
         "header": [],
@@ -114,17 +114,104 @@
             "cases"
           ]
         },
-        "description": "Uploads samples/claim.pdf and samples/policy.pdf. Then run 'Get case' until READY.",
+        "description": "A draft with a claim-form card and a policy card. Files follow one per request.",
+        "body": {
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          },
+          "raw": "{\n  \"cards\": [\n    {\n      \"id\": \"claim-form\",\n      \"role\": \"claim_form\"\n    },\n    {\n      \"id\": \"policy\",\n      \"role\": \"policy\"\n    }\n  ]\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('draft', () => pm.response.to.have.status(201));",
+              "pm.environment.set('caseId', pm.response.json().case_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Upload claim form",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/files",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "files"
+          ]
+        },
+        "description": "",
         "body": {
           "mode": "formdata",
           "formdata": [
             {
-              "key": "claim",
-              "type": "file",
-              "src": "/Users/chitresh/Documents/dev/hackii/ClaimLens/backend/samples/claim.pdf"
+              "key": "card_id",
+              "value": "claim-form",
+              "type": "text"
             },
             {
-              "key": "policy",
+              "key": "file",
+              "type": "file",
+              "src": "/Users/chitresh/Documents/dev/hackii/ClaimLens/backend/samples/claim.pdf"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('uploaded', () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Upload policy",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/files",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "files"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "card_id",
+              "value": "policy",
+              "type": "text"
+            },
+            {
+              "key": "file",
               "type": "file",
               "src": "/Users/chitresh/Documents/dev/hackii/ClaimLens/backend/samples/policy.pdf"
             }
@@ -137,8 +224,38 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('created', () => pm.response.to.have.status(201));",
-              "pm.environment.set('caseId', pm.response.json().case_id);"
+              "pm.test('uploaded', () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Submit",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/submit",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "submit"
+          ]
+        },
+        "description": "Queues the analysis. Then run 'Get case' until READY."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('queued', () => pm.response.to.have.status(200));"
             ]
           }
         }

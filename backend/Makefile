@@ -35,8 +35,8 @@ deploy:
 	  --substitutions _IMAGE=$(REG)/$(SERVICE):$(TAG) ..
 	gcloud run deploy $(SERVICE) --project $(PROJECT) --region $(REGION) --image $(REG)/$(SERVICE):$(TAG) \
 	  --service-account $(shell $(TF) output -raw service_account_email) --allow-unauthenticated \
-	  --cpu 1 --memory 1Gi --timeout 300 --no-cpu-throttling --min-instances 0 --max-instances 2 \
-	  --set-env-vars "^##^APP_ENV=prod##STORAGE=gcs##DB=firestore##AI=vertex##OCR=docai##AUTH_MODE=firebase##GCP_PROJECT=$(PROJECT)##BUCKET=$(shell $(TF) output -raw bucket)##FIRESTORE_DB=claimlens##GEMINI_MODEL=gemini-2.5-flash##VERTEX_LOCATION=global##DOCAI_LOCATION=us##DOCAI_PROCESSOR=$(shell $(TF) output -raw docai_processor_id)"
+	  --cpu 1 --memory 1Gi --timeout 1800 --no-cpu-throttling --min-instances 0 --max-instances 2 \
+	  --set-env-vars "^##^APP_ENV=prod##STORAGE=gcs##DB=firestore##AI=vertex##OCR=docai##AUTH_MODE=firebase##GCP_PROJECT=$(PROJECT)##BUCKET=$(shell $(TF) output -raw bucket)##FIRESTORE_DB=claimlens##GEMINI_MODEL=gemini-2.5-flash##VERTEX_LOCATION=global##DOCAI_LOCATION=us##DOCAI_PROCESSOR=$(shell $(TF) output -raw docai_processor_id)##JOBS=cloudtasks##TASKS_QUEUE=$(shell $(TF) output -raw tasks_queue)##TASKS_LOCATION=$(REGION)##TASKS_SA=$(shell $(TF) output -raw tasks_sa_email)##SERVICE_URL=$(shell gcloud run services describe $(SERVICE) --project $(PROJECT) --region $(REGION) --format 'value(status.url)')"
 seed-cloud:
 	DB=firestore AI=fake $(PY) scripts/seed_invoices.py
 FIREBASE_KEY = $(shell gcloud secrets versions access latest --secret claimlens-firebase-web-api-key --project $(PROJECT) 2>/dev/null)

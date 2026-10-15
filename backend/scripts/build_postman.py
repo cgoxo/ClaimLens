@@ -45,9 +45,13 @@ def collection() -> dict:
                "pm.environment.set('idToken', pm.response.json().idToken);"],
         description="Gets a Firebase ID token for the email/password test user and stores it as idToken.")
     sign_in["request"]["auth"] = {"type": "noauth"}
-    files = {"mode": "formdata", "formdata": [
-        {"key": "claim", "type": "file", "src": str(SAMPLES / "claim.pdf")},
-        {"key": "policy", "type": "file", "src": str(SAMPLES / "policy.pdf")}]}
+    cards = {"mode": "raw", "options": {"raw": {"language": "json"}},
+             "raw": json.dumps({"cards": [{"id": "claim-form", "role": "claim_form"},
+                                          {"id": "policy", "role": "policy"}]}, indent=2)}
+
+    def upload(card_id: str, name: str) -> dict:
+        return {"mode": "formdata", "formdata": [{"key": "card_id", "value": card_id, "type": "text"},
+                                                 {"key": "file", "type": "file", "src": str(SAMPLES / name)}]}
     return {
         "info": {"_postman_id": str(uuid.uuid5(uuid.NAMESPACE_URL, "claimlens")), "name": "ClaimLens",
                  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
@@ -58,10 +62,17 @@ def collection() -> dict:
             sign_in,
             req("Health", "GET", "health"),
             req("Me", "GET", "api/me"),
-            req("Create case (sample claim + policy)", "POST", "api/cases", body=files,
-                tests=["pm.test('created', () => pm.response.to.have.status(201));",
+            req("1. Create draft case (cards)", "POST", "api/cases", body=cards,
+                tests=["pm.test('draft', () => pm.response.to.have.status(201));",
                        "pm.environment.set('caseId', pm.response.json().case_id);"],
-                description="Uploads samples/claim.pdf and samples/policy.pdf. Then run 'Get case' until READY."),
+                description="A draft with a claim-form card and a policy card. Files follow one per request."),
+            req("2. Upload claim form", "POST", "api/cases/{{caseId}}/files", body=upload("claim-form", "claim.pdf"),
+                tests=["pm.test('uploaded', () => pm.response.to.have.status(201));"]),
+            req("3. Upload policy", "POST", "api/cases/{{caseId}}/files", body=upload("policy", "policy.pdf"),
+                tests=["pm.test('uploaded', () => pm.response.to.have.status(201));"]),
+            req("4. Submit", "POST", "api/cases/{{caseId}}/submit",
+                tests=["pm.test('queued', () => pm.response.to.have.status(200));"],
+                description="Queues the analysis. Then run 'Get case' until READY."),
             req("Get case", "GET", "api/cases/{{caseId}}",
                 tests=["const c = pm.response.json();",
                        "console.log(c.status, c.score, c.risk, (c.findings || []).length + ' findings');",
