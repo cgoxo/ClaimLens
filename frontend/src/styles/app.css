@@ -261,3 +261,7 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
 .toasts { position: fixed; right: var(--space-4); bottom: var(--space-4); display: grid; gap: var(--space-2); z-index: 20; max-width: min(360px, calc(100vw - 32px)); }
 .toast { text-align: left; background: var(--ink); color: var(--sheet); border: 0; padding: var(--space-3) var(--space-4); box-shadow: var(--shadow-paper); font: inherit; font-size: 14px; cursor: pointer; }
 .toast:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ---------- case list: live status and unseen ---------- */
+.chip { display: inline-block; padding: 1px 8px; border: 1px solid var(--slate); color: var(--slate); font-size: 13px; }
+.new-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--stamp-red); vertical-align: middle; }

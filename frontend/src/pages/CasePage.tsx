@@ -9,6 +9,7 @@ import PageViewer from "../components/PageViewer";
 import Progress from "../components/Progress";
 import RiskStamp from "../components/RiskStamp";
 import { useCasePolling } from "../hooks/useCasePolling";
+import { useCaseWatcher } from "../hooks/useCaseWatcher";
 import { SEVERITY_ORDER } from "../lib/findings";
 import { money } from "../lib/format";
 
@@ -24,6 +25,13 @@ export default function CasePage() {
   const openFact = (c: Citation) => { setPinned(c); setSelectionKey((k) => k + 1); };
 
   useEffect(() => () => client.releaseImages(), [client]);
+
+  // the server marks a finished case seen when it is fetched; refresh the list so badges and the tab count follow
+  const { refresh } = useCaseWatcher();
+  const finished = data?.status === "READY" || data?.status === "FAILED";
+  useEffect(() => {
+    if (finished) void refresh();
+  }, [finished, refresh]);
 
   // findings in display order (grouped by severity), so numbering and j/k match what is on screen
   const findings = useMemo(

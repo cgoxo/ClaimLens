@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
-import type { CaseSummary } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import AppHeader from "../components/AppHeader";
 import CaseTable from "../components/CaseTable";
 import UploadTrays from "../components/UploadTrays";
+import { useCaseWatcher } from "../hooks/useCaseWatcher";
+import { askPermission } from "../lib/notify";
 
 async function sampleFile(name: string): Promise<File> {
   const res = await fetch(`/samples/${name}`);
@@ -16,20 +17,22 @@ async function sampleFile(name: string): Promise<File> {
 export default function UploadPage() {
   const { client } = useAuth();
   const navigate = useNavigate();
-  const [cases, setCases] = useState<CaseSummary[]>([]);
+  const { cases, track, refresh } = useCaseWatcher();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    client.listCases().then(setCases).catch(() => setCases([]));
-  }, [client]);
+    void refresh();
+  }, [refresh]);
 
   async function open(getFiles: () => Promise<[File, File]>) {
+    askPermission(); // must run inside the click, before any await
     setBusy(true);
     setError(null);
     try {
       const [claim, policy] = await getFiles();
       const { case_id } = await client.createCase(claim, policy);
+      track(case_id);
       navigate(`/cases/${case_id}`);
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : e instanceof Error ? e.message : "Upload failed");

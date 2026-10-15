@@ -2,6 +2,9 @@ import { Link } from "react-router-dom";
 import type { CaseSummary } from "../api/types";
 import RiskStamp from "./RiskStamp";
 
+const RUNNING = new Set(["QUEUED", "READING", "CHECKING", "PROVING"]);
+const live = (status: string) => `${status[0]}${status.slice(1).toLowerCase()}…`;
+
 const when = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -16,9 +19,12 @@ export default function CaseTable({ cases }: { cases: CaseSummary[] }) {
       <tbody>
         {sorted.map((c) => (
           <tr key={c.id}>
-            <td><Link className="mono" to={`/cases/${c.id}`}>{c.id}</Link></td>
+            <td>
+              {c.unseen && <span className="new-dot" aria-label="new" title="Finished since you last looked" />}
+              <Link className="mono" to={`/cases/${c.id}`}>{c.id}</Link>
+            </td>
             <td>{when(c.created_at)}</td>
-            <td>{c.status.toLowerCase()}</td>
+            <td>{RUNNING.has(c.status) ? <span className="chip" title={c.progress?.label}>{live(c.status)}</span> : c.status.toLowerCase()}</td>
             <td>{c.risk ? <RiskStamp risk={c.risk} score={c.score} small /> : "–"}</td>
             <td className="num mono">{c.score ?? "–"}</td>
           </tr>

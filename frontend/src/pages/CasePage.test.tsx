@@ -164,3 +164,10 @@ test("a context link opens its page in the viewer", async () => {
   await userEvent.click(await screen.findByRole("button", { name: "Diagnosis, claim page 2" }));
   expect(screen.getByRole("button", { name: "claim page 2" })).toHaveAttribute("aria-current", "true");
 });
+
+test("opening a finished case refreshes the case list so its new badge clears", async () => {
+  const listCases = vi.fn(async () => []);
+  setup({ listCases });
+  await screen.findByLabelText("Risk high, score 100 of 100");
+  await waitFor(() => expect(listCases).toHaveBeenCalledTimes(2));
+});

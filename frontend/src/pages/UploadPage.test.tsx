@@ -3,6 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { ApiError } from "../api/client";
 import { renderPage } from "../test/auth";
 import UploadPage from "./UploadPage";
+import { askPermission } from "../lib/notify";
+
+vi.mock("../lib/notify", async (original) => ({
+  ...(await original<typeof import("../lib/notify")>()),
+  askPermission: vi.fn(),
+}));
 
 const pdf = (name: string) => new File(["%PDF-1.4"], name, { type: "application/pdf" });
 const user = () => userEvent.setup({ applyAccept: false });
@@ -73,4 +79,14 @@ test("Your cases lists cases newest first, linking to each", async () => {
   const links = screen.getAllByRole("link", { name: /new1|old1/ });
   expect(links[0]).toHaveAttribute("href", "/cases/new1");
   expect(links[1]).toHaveAttribute("href", "/cases/old1");
+});
+
+test("opening a case asks for notification permission and starts watching it", async () => {
+  const client = setup();
+  await user().upload(screen.getByLabelText("Claim file"), pdf("claim.pdf"));
+  await user().upload(screen.getByLabelText("Policy file"), pdf("policy.pdf"));
+  const before = client.listCases.mock.calls.length;
+  await user().click(screen.getByRole("button", { name: "Open case" }));
+  expect(askPermission).toHaveBeenCalled();
+  await waitFor(() => expect(client.listCases.mock.calls.length).toBeGreaterThan(before));
 });
