@@ -92,6 +92,7 @@ class Case(BaseModel):
     payable: float | None = None
     summary: str | None = None
     dropped_findings: list[dict] = []
+    context: dict | None = None  # grounded claim/policy facts, saved right after Extract
 
 
 # --- facts the AI pulls out (each value carries its proof) ------------------
@@ -130,6 +131,7 @@ class Bill(BaseModel):
 
 class ClaimFacts(BaseModel):
     policy_number: Fact | None = None
+    hospital_name: Fact | None = None
     claimant_name: Fact | None = None
     admission_date: Fact | None = None
     discharge_date: Fact | None = None
@@ -151,6 +153,7 @@ class WaitingPeriod(BaseModel):
 
 
 class PolicyFacts(BaseModel):
+    insurer_name: Fact | None = None
     policy_number: Fact | None = None
     start_date: Fact | None = None
     sum_insured: Fact | None = None

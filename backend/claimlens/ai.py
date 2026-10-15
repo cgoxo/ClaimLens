@@ -45,10 +45,12 @@ Fill the JSON schema. Rules:
 - `bills`: one entry per bill. `inpatient` is true when the bill is for an inpatient / ward / hospital-stay.
   Give every line item with its amount, and the bill total as printed.
 - `room`: the room rate per day and number of days, if the bill shows them.
+- `hospital_name`: the hospital's name as printed.
 - If something is not in the documents, use null. Never invent values."""
 
 POLICY_PROMPT = """You read an insurance policy. The text is split into pages marked "=== policy page N ===".
 Fill the JSON schema. For every value give `page` and `quote`, an exact short copy of the text on that page.
+- `insurer_name`: the insurance company's name as printed.
 - `start_date`: the policy start date, as written.
 - `sum_insured` and `room_rent_limit_per_day`: plain numbers (rupees). For the room limit, quote the sentence
   that sets the limit.

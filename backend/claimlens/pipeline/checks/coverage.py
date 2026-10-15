@@ -1,18 +1,12 @@
 """Coverage check: Gemini reads the policy; code re-does the arithmetic it can be wrong about."""
 
 import re
-from datetime import date
-
 from rapidfuzz import fuzz
 
-from claimlens.models import Citation, Finding
+from claimlens.models import Citation, ClaimFacts, Finding, PolicyFacts
 from claimlens.pipeline.context import Ctx
 from claimlens.pipeline.extract import labelled_text, locate
-from claimlens.pipeline.text import normalise, parse_date, parse_money
-
-
-def months_between(a: date, b: date) -> int:
-    return (b.year - a.year) * 12 + b.month - a.month - (1 if b.day < a.day else 0)
+from claimlens.pipeline.text import months_between, normalise, parse_date, parse_money
 
 
 def _finding(code, title, detail, page, quote, amount=0.0, n=1) -> Finding:
@@ -21,11 +15,19 @@ def _finding(code, title, detail, page, quote, amount=0.0, n=1) -> Finding:
                    citations=[Citation(doc="policy", page=page, quote=quote)])
 
 
+def policy_start(p: PolicyFacts):
+    return parse_date(p.start_date.value) if p.start_date else None
+
+
+def treated_date(f: ClaimFacts):
+    """When treatment happened: the first procedure date, else the admission date."""
+    return (next((parse_date(pr.date.value) for pr in f.procedures if pr.date), None)
+            or (parse_date(f.admission_date.value) if f.admission_date else None))
+
+
 def _waiting_periods(ctx: Ctx) -> list[Finding]:
     f, p = ctx.claim_facts, ctx.policy_facts
-    start = parse_date(p.start_date.value) if p.start_date else None
-    treated = (next((parse_date(pr.date.value) for pr in f.procedures if pr.date), None)
-               or (parse_date(f.admission_date.value) if f.admission_date else None))
+    start, treated = policy_start(p), treated_date(f)
     if not (start and treated):
         return []
     targets = [str(f.diagnosis.value)] if f.diagnosis and f.diagnosis.value else []

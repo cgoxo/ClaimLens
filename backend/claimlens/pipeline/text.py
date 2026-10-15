@@ -38,3 +38,7 @@ def parse_money(v) -> float | None:
         return float(cleaned)
     except ValueError:
         return None
+
+
+def months_between(a: date, b: date) -> int:
+    return (b.year - a.year) * 12 + b.month - a.month - (1 if b.day < a.day else 0)

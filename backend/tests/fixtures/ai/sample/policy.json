@@ -1,4 +1,5 @@
 {
+  "insurer_name": {"value": "Example Health Insurance Co.", "page": 1, "quote": "Example Health Insurance Co."},
   "policy_number": {"value": "EH-2025-778812", "page": 1, "quote": "EH-2025-778812"},
   "start_date": {"value": "01-Jan-2026", "page": 1, "quote": "01-Jan-2026"},
   "sum_insured": {"value": 300000, "page": 1, "quote": "Rs 3,00,000"},

@@ -4,14 +4,28 @@ import logging
 
 from claimlens.logs import case_logger
 from claimlens.pipeline.checks import ALL_CHECKS
+from claimlens.pipeline.checks.coverage import policy_start, treated_date
 from claimlens.pipeline.checks.duplicate import register_invoices
 from claimlens.pipeline.context import Ctx
 from claimlens.pipeline.extract import extract
 from claimlens.pipeline.prove import prove
 from claimlens.pipeline.read import ReadResult, read_document
 from claimlens.pipeline.report import payable, risk_band, score, sort_findings, summarise
+from claimlens.pipeline.text import months_between
 
 log = logging.getLogger(__name__)
+
+
+def context_of(ctx: Ctx) -> dict:
+    """What the claim is about, for the reviewer: grounded facts only, plus policy age at treatment."""
+    f, p = ctx.claim_facts, ctx.policy_facts
+    start = policy_start(p) if p else None
+    treated = treated_date(f) if f else None
+    return {
+        "claim": f.model_dump(mode="json", exclude_none=True) if f else None,
+        "policy": p.model_dump(mode="json", exclude_none=True) if p else None,
+        "policy_age_months": months_between(start, treated) if start and treated else None,
+    }
 
 
 def run_pipeline(case_id: str, deps) -> None:
@@ -35,6 +49,7 @@ def run_pipeline(case_id: str, deps) -> None:
 
         status("CHECKING")
         extract(ctx)
+        db.update_case(case_id, context=context_of(ctx))
         findings = [f for check in ALL_CHECKS for f in check(ctx)]
 
         status("PROVING")
