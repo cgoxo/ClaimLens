@@ -114,5 +114,8 @@ def test_status_and_progress_share_writes(tmp_path):
     calls, original = [], deps.db.update_case
     deps.db.update_case = lambda c, **k: calls.append(set(k)) or original(c, **k)
     run_pipeline(case_id, deps)
-    assert len(calls) <= 10 + 1  # + one progress write per file after the first (2 files here)
+    from claimlens.pipeline.checks import ALL_CHECKS
+
+    # 4 status writes (each carrying progress) + one per check + per file's first page + the last page
+    assert len(calls) <= 4 + len(ALL_CHECKS) + 2 + 1
     assert {"status"} not in calls  # every status change carries its progress
