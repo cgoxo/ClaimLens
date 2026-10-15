@@ -27,7 +27,8 @@ steps:
     args: ["run", "--rm", "--entrypoint", "python", "${_IMAGE}", "-m", "pytest", "-q", "/app/test_run_job.py"]
 images: ["${_IMAGE}"]
 substitutions:
-  _WEIGHTS_SHA256: ""
+  # pinned on the first successful fetch (2026-10-16): the build fails if the file ever changes
+  _WEIGHTS_SHA256: "f82aaafdd1142775231feedcea0bb7027f7370561d9e8d107465454001865989"
 options:
   machineType: E2_HIGHCPU_8
   diskSizeGb: "100"

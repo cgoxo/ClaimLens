@@ -24,6 +24,7 @@ from lib.config import config, update_config  # noqa: E402
 from Splicing.data.AbstractDataset import AbstractDataset  # noqa: E402
 
 WEIGHTS = HERE / "weights" / "CAT_full_v2.pth.tar"
+_DTYPES = [type(np.dtype(t)) for t in ("float64", "float32", "int64", "int32")]  # numpy's dtype classes
 TRANSPOSE = {2: [Image.FLIP_LEFT_RIGHT], 3: [Image.ROTATE_180], 4: [Image.FLIP_TOP_BOTTOM],
              5: [Image.FLIP_LEFT_RIGHT, Image.ROTATE_90], 6: [Image.ROTATE_270],
              7: [Image.FLIP_LEFT_RIGHT, Image.ROTATE_270], 8: [Image.ROTATE_90]}
@@ -44,6 +45,9 @@ def load_model(device: torch.device):
     # weights_only: the file comes from a community mirror, and a pickle can carry code; this loader only
     # accepts tensors and plain values, so anything else fails to load instead of running.
     # strict: every tensor must exist in CAT-Net with the right shape, so a wrong or altered file fails too.
+    # the checkpoint stores a few numpy numbers (training metrics) next to the tensors: allow exactly the numpy
+    # constructors for a plain scalar and its dtype, nothing else
+    torch.serialization.add_safe_globals([np.core.multiarray.scalar, np.dtype, *_DTYPES])
     state = torch.load(str(WEIGHTS), map_location="cpu", weights_only=True)
     model.load_state_dict(state["state_dict"], strict=True)
     return model.to(device).eval()
