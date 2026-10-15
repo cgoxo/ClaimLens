@@ -109,3 +109,23 @@ def test_policy_number_containing_the_other_is_medium(ctx):
     [f] = _with_policy_number(ctx, "EH-2025-778812/2026/01")
     assert f.severity == "medium"
     assert "renewal" in f.detail
+
+
+def test_name_mismatch_works_without_a_grounded_claimant_name(ctx):
+    # on photos OCR may read "Iyer" as "lyer", so the claimant fact fails grounding; the names on the pages remain
+    from claimlens.models import Fact
+
+    f = ctx.claim_facts
+    names = [Fact(value="Kavya lyer", page=1, quote="Kavya lyer"), Fact(value="Suresh Reddy", page=2, quote="Suresh Reddy"),
+             Fact(value="Kavya lyer", page=3, quote="Kavya lyer")]
+    ctx.claim_facts = f.model_copy(update={"claimant_name": None, "names": names})
+    [m] = _codes(check_story(ctx), "name_mismatch")
+    assert m.severity == "high" and "Suresh Reddy" in m.title and m.citations[0].page == 2
+
+
+def test_no_majority_name_means_no_name_finding(ctx):
+    from claimlens.models import Fact
+
+    names = [Fact(value="A Kumar", page=1, quote="A Kumar"), Fact(value="B Rao", page=2, quote="B Rao")]
+    ctx.claim_facts = ctx.claim_facts.model_copy(update={"claimant_name": None, "names": names})
+    assert _codes(check_story(ctx), "name_mismatch") == []

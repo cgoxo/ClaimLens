@@ -1,6 +1,7 @@
 """Story check: do the facts across the documents agree with each other? Code only."""
 
 import re
+from collections import Counter
 
 from rapidfuzz import fuzz
 
@@ -64,11 +65,24 @@ def _inpatient_outside_stay(ctx: Ctx) -> list[Finding]:
     return out
 
 
+def _expected_name(f) -> str | None:
+    """The claimant's name; if that fact didn't survive grounding (OCR on a photo can read "Iyer" as "lyer"),
+    the name most pages agree on."""
+    if f.claimant_name and f.claimant_name.value:
+        return str(f.claimant_name.value)
+    counts = Counter(str(n.value) for n in f.names if n.value)
+    if not counts:
+        return None
+    (top, n), *rest = counts.most_common()
+    return top if n >= 2 and (not rest or n > rest[0][1]) else None  # a clear majority, or nothing
+
+
 def _name_mismatch(ctx: Ctx) -> list[Finding]:
     f = ctx.claim_facts
-    if not f.claimant_name or not f.claimant_name.value:
+    claimant = _expected_name(f)
+    if claimant is None:
         return []
-    expected = str(f.claimant_name.value).lower()
+    expected = claimant.lower()
     out, seen = [], set()
     for n, name in enumerate(f.names, 1):
         if not name.value or (str(name.value).lower(), name.page) in seen:
@@ -78,7 +92,7 @@ def _name_mismatch(ctx: Ctx) -> list[Finding]:
         if ratio >= 100:
             continue
         severity = "low" if ratio >= 85 else "high"
-        out.append(_finding("name_mismatch", severity, f"Name mismatch: {name.value} vs {f.claimant_name.value}",
+        out.append(_finding("name_mismatch", severity, f"Name mismatch: {name.value} vs {claimant}",
                             "Possible typo." if severity == "low" else "Looks like a different person.", name, n))
     return out
 
