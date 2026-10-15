@@ -262,3 +262,20 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
 /* ---------- case list: live status and unseen ---------- */
 .chip { display: inline-block; padding: 1px 8px; border: 1px solid var(--slate); color: var(--slate); font-size: 13px; }
 .new-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--stamp-red); vertical-align: middle; }
+
+/* ---------- upload: cards ---------- */
+.case-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: var(--space-4); margin-bottom: var(--space-4); align-items: start; }
+.case-card { margin: 0; }
+.case-card-head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.case-card-head .tray-title { margin: 0; flex: 1; }
+.case-card-head select { font: inherit; font-size: 13px; padding: 2px 4px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); text-transform: capitalize; }
+.btn-icon { background: none; border: 1px solid transparent; color: var(--ink-soft); cursor: pointer; padding: 0 6px; font-size: 12px; line-height: 1.6; }
+.btn-icon:hover:not(:disabled) { border-color: var(--rule); color: var(--ink); }
+.btn-icon:disabled { opacity: 0.35; cursor: default; }
+.btn-icon:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.card-files { list-style: decimal inside; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: 2px; font-size: 13px; }
+.card-files li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.card-file-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.card-file-error { flex-basis: 100%; margin: 0; font-size: 13px; }
+.add-bill { align-self: start; }
+.open-row { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }

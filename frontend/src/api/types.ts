@@ -1,7 +1,21 @@
 // Mirrors the backend JSON (backend/claimlens/models.py and api.py).
 
 export type Severity = "critical" | "high" | "medium" | "low" | "coverage";
-export type Status = "QUEUED" | "READING" | "CHECKING" | "PROVING" | "READY" | "FAILED";
+export type Status = "DRAFT" | "QUEUED" | "READING" | "CHECKING" | "PROVING" | "READY" | "FAILED";
+export type CardRole = "claim_form" | "bill" | "supporting" | "policy";
+export type BillKind = "hospital" | "pharmacy" | "lab" | "other";
+
+/** A card as the user lays it out: a group of files that belong together (one bill, the policy...). */
+export interface CardSpec {
+  id: string;
+  role: CardRole;
+  kind: BillKind | null;
+}
+
+export interface CaseCard extends CardSpec {
+  label: string;
+  files: { name: string; pages: number }[];
+}
 export type Risk = "low" | "review" | "high";
 export type BBox = [number, number, number, number];
 
@@ -39,6 +53,7 @@ export interface PageMeta {
   kind: "digital" | "scanned" | "scanned_with_text" | "image" | "unreadable";
   width: number;
   height: number;
+  card_id: string | null;
 }
 
 export interface Fact {
@@ -77,6 +92,7 @@ export interface Case {
   summary: string | null;
   dropped_findings: { title: string; reason: string }[];
   context: CaseContextData | null;
+  cards: CaseCard[];
   progress: CaseProgress | null;
   finished_at: string | null;
   seen_at: string | null;

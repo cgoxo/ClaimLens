@@ -19,6 +19,10 @@ export const sampleCase: Case = {
   "summary": "High risk: the bill total was edited and the invoice was used in an earlier claim. Cataract is in its 24-month waiting period.",
   "dropped_findings": [],
   "progress": null,
+  "cards": [
+    { "id": "claim", "role": "claim_form", "kind": null, "label": "Claim form", "files": [{ "name": "claim.pdf", "pages": 0 }] },
+    { "id": "policy", "role": "policy", "kind": null, "label": "Policy", "files": [{ "name": "policy.pdf", "pages": 0 }] }
+  ],
   "finished_at": "2026-10-15T19:13:35.028353Z",
   "seen_at": null,
   "findings_count": 8,
@@ -244,6 +248,7 @@ export const sampleCase: Case = {
     {
       "doc": "claim",
       "page": 1,
+      "card_id": null,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -251,6 +256,7 @@ export const sampleCase: Case = {
     {
       "doc": "claim",
       "page": 2,
+      "card_id": null,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -258,6 +264,7 @@ export const sampleCase: Case = {
     {
       "doc": "claim",
       "page": 3,
+      "card_id": null,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -265,6 +272,7 @@ export const sampleCase: Case = {
     {
       "doc": "claim",
       "page": 4,
+      "card_id": null,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -272,6 +280,7 @@ export const sampleCase: Case = {
     {
       "doc": "policy",
       "page": 1,
+      "card_id": null,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -279,6 +288,7 @@ export const sampleCase: Case = {
     {
       "doc": "policy",
       "page": 2,
+      "card_id": null,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -286,6 +296,7 @@ export const sampleCase: Case = {
     {
       "doc": "policy",
       "page": 3,
+      "card_id": null,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125

@@ -36,17 +36,31 @@ test("401 calls onUnauthorized once and throws", async () => {
   expect(onUnauthorized).toHaveBeenCalledTimes(1);
 });
 
-test("createCase posts multipart with claim and policy, no explicit content-type", async () => {
-  fetchMock.mockResolvedValue(json(201, { case_id: "c1", status: "QUEUED" }));
-  const res = await client().createCase(new File(["a"], "claim.pdf"), new File(["b"], "policy.pdf"));
+test("createDraft posts the cards as JSON", async () => {
+  fetchMock.mockResolvedValue(json(201, { case_id: "c1", status: "DRAFT" }));
+  const cards = [{ id: "b1", role: "bill" as const, kind: "hospital" as const }];
+  expect(await client().createDraft(cards)).toEqual({ case_id: "c1", status: "DRAFT" });
   const [url, init] = fetchMock.mock.calls[0];
-  expect(url).toBe("/api/cases");
-  expect(init.method).toBe("POST");
-  expect(init.body).toBeInstanceOf(FormData);
-  expect((init.body as FormData).get("claim")).toBeInstanceOf(File);
-  expect((init.body as FormData).get("policy")).toBeInstanceOf(File);
+  expect([url, init.method]).toEqual(["/api/cases", "POST"]);
+  expect(JSON.parse(init.body)).toEqual({ cards });
+  expect(new Headers(init.headers).get("content-type")).toBe("application/json");
+});
+
+test("uploadFile posts one file with its card", async () => {
+  fetchMock.mockResolvedValue(json(201, { card_id: "b1", index: 0, pages: 2 }));
+  const file = new File(["%PDF"], "bill.pdf");
+  expect(await client().uploadFile("c1", "b1", file)).toEqual({ card_id: "b1", index: 0, pages: 2 });
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe("/api/cases/c1/files");
+  expect((init.body as FormData).get("card_id")).toBe("b1");
+  expect(((init.body as FormData).get("file") as File).name).toBe("bill.pdf");
   expect(new Headers(init.headers).has("content-type")).toBe(false);
-  expect(res.case_id).toBe("c1");
+});
+
+test("submit posts to submit", async () => {
+  fetchMock.mockResolvedValue(json(200, { case_id: "c1", status: "QUEUED" }));
+  expect(await client().submit("c1")).toEqual({ case_id: "c1", status: "QUEUED" });
+  expect(fetchMock.mock.calls[0][0]).toBe("/api/cases/c1/submit");
 });
 
 test("review posts the action and note", async () => {

@@ -1,4 +1,4 @@
-import type { Case, CaseSummary, Finding, Status } from "./types";
+import type { CardSpec, Case, CaseSummary, Finding, Status } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, public detail: string) {
@@ -42,11 +42,28 @@ export function createClient(getHeaders: () => Promise<Headers>, onUnauthorized:
     listCases: () => getJson<CaseSummary[]>("/api/cases"),
     getCase: (id: string) => getJson<Case>(`/api/cases/${encodeURIComponent(id)}`),
 
-    createCase(claim: File, policy: File) {
+    /** Step 1 of 3: a draft case with its cards. */
+    createDraft(cards: CardSpec[]) {
+      return getJson<{ case_id: string; status: Status }>("/api/cases", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cards }),
+      });
+    },
+
+    /** Step 2 of 3: one file into one card (one per request: Cloud Run caps a request at 32 MB). */
+    uploadFile(caseId: string, cardId: string, file: File) {
       const body = new FormData();
-      body.append("claim", claim);
-      body.append("policy", policy);
-      return getJson<{ case_id: string; status: Status }>("/api/cases", { method: "POST", body });
+      body.append("card_id", cardId);
+      body.append("file", file);
+      return getJson<{ card_id: string; index: number; pages: number }>(
+        `/api/cases/${encodeURIComponent(caseId)}/files`, { method: "POST", body });
+    },
+
+    /** Step 3 of 3: queue the analysis. */
+    submit(caseId: string) {
+      return getJson<{ case_id: string; status: Status }>(`/api/cases/${encodeURIComponent(caseId)}/submit`,
+        { method: "POST" });
     },
 
     review(id: string, fid: string, action: "accept" | "dismiss", note = "") {
