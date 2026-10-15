@@ -1,10 +1,16 @@
 import json
+import logging
+import time
 from pathlib import Path
 from typing import Protocol
 
 from pydantic import TypeAdapter
 
 from claimlens.models import ClaimFacts, CoverageItem, DocLabel, Finding, PolicyFacts
+
+
+log = logging.getLogger(__name__)
+ATTEMPTS = 4  # waits of 4, 8, 16 s: a burst of cases shouldn't fail on a passing rate limit
 
 
 class Ai(Protocol):
@@ -116,8 +122,18 @@ class VertexGemini:
         if schema is not None:
             config.response_mime_type = "application/json"
             config.response_json_schema = _schema(schema)
-        response = self.client.models.generate_content(model=self.model, contents=text, config=config)
-        return response.text or ""
+        for attempt in range(ATTEMPTS):
+            try:
+                response = self.client.models.generate_content(model=self.model, contents=text, config=config)
+                return response.text or ""
+            except Exception as e:
+                # a rate limit (429) or a server hiccup (5xx) passes; anything else is a real error
+                code = getattr(e, "code", None)
+                if attempt == ATTEMPTS - 1 or not (code == 429 or (isinstance(code, int) and code >= 500)):
+                    raise
+                log.warning("Gemini busy (%s), retrying in %ss", code, 4 * 2 ** attempt)
+                time.sleep(4 * 2 ** attempt)
+        raise RuntimeError("unreachable")
 
     def classify_documents(self, files_text: str) -> list[DocLabel]:
         return TypeAdapter(list[DocLabel]).validate_json(self._ask(DOCUMENTS_PROMPT, files_text, list[DocLabel]))
