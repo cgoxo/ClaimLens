@@ -1,22 +1,23 @@
 from datetime import timedelta
-
-RUNNING = {"QUEUED", "READING", "CHECKING", "PROVING"}
-FINISHED = {"READY", "FAILED"}
-STALE_AFTER = timedelta(minutes=15)
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 from claimlens.auth import current_user
-from claimlens.models import Case, Review, now
+from claimlens.cards import card_label, cards_of, layout_error, stream_of
+from claimlens.models import BillKind, Card, CardRole, Case, CaseFile, Review, now
 from claimlens.pipeline.read import open_document
+
+RUNNING = {"QUEUED", "READING", "CHECKING", "PROVING"}
+FINISHED = {"READY", "FAILED"}
+STALE_AFTER = timedelta(minutes=15)
 
 router = APIRouter(prefix="/api")
 
-ALLOWED = {"claim": {"pdf", "jpg", "jpeg", "png"}, "policy": {"pdf"}}
+ALLOWED = {"pdf", "jpg", "jpeg", "png"}
 CONTENT_TYPES = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
 
 
@@ -45,11 +46,12 @@ def _unseen(case: Case) -> bool:
             and (case.seen_at is None or case.seen_at < case.finished_at))
 
 
-async def _validated(doc: str, upload: UploadFile, settings) -> tuple[bytes, str]:
+async def _validated(doc: str, upload: UploadFile, settings) -> tuple[bytes, str, int]:
+    """The file's bytes, extension and page count, or a 400 saying what is wrong with it."""
     name = upload.filename or f"{doc}.pdf"
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-    if ext not in ALLOWED[doc]:
-        raise HTTPException(400, f"{doc}: file type .{ext} not allowed ({', '.join(sorted(ALLOWED[doc]))})")
+    if ext not in ALLOWED:
+        raise HTTPException(400, f"{doc}: file type .{ext} not allowed ({', '.join(sorted(ALLOWED))})")
     data = await upload.read()
     if len(data) > settings.max_file_mb * 1024 * 1024:
         raise HTTPException(400, f"{doc}: file is larger than {settings.max_file_mb} MB")
@@ -63,7 +65,7 @@ async def _validated(doc: str, upload: UploadFile, settings) -> tuple[bytes, str
         raise HTTPException(400, f"{doc}: file has no pages")
     if pdf.page_count > settings.max_pages:
         raise HTTPException(400, f"{doc}: more than {settings.max_pages} pages")
-    return data, ext
+    return data, ext, pdf.page_count
 
 
 @router.get("/me")
@@ -71,20 +73,73 @@ def me(user: str = Depends(current_user)):
     return {"email": user}
 
 
+class CardIn(BaseModel):
+    id: str
+    role: CardRole
+    kind: BillKind | None = None
+
+
+class NewCase(BaseModel):
+    cards: list[CardIn]
+
+
 @router.post("/cases", status_code=201)
-async def create_case(request: Request, claim: UploadFile, policy: UploadFile, user: str = Depends(current_user)):
+def create_case(body: NewCase, request: Request, user: str = Depends(current_user)):
+    """Step 1 of 3: a draft case with the user's cards; files follow one per request."""
     deps = _deps(request)
     settings = deps.settings
+    cards = [Card(**c.model_dump()) for c in body.cards]
+    if error := layout_error(cards, settings):
+        raise HTTPException(400, error)
     if deps.db.count_cases_since(user, now() - timedelta(days=1)) >= settings.daily_case_limit:
         raise HTTPException(429, f"Daily limit of {settings.daily_case_limit} cases reached")
-    uploads = {"claim": await _validated("claim", claim, settings),
-               "policy": await _validated("policy", policy, settings)}
     case_id = uuid4().hex[:12]
-    files = {}
-    for doc, (data, ext) in uploads.items():
-        files[doc] = f"cases/{case_id}/{doc}.{ext}"
-        deps.storage.put(files[doc], data, CONTENT_TYPES[ext])
-    deps.db.create_case(Case(id=case_id, owner_email=user, files=files))
+    deps.db.create_case(Case(id=case_id, owner_email=user, status="DRAFT", cards=cards))
+    return {"case_id": case_id, "status": "DRAFT"}
+
+
+def _draft(request: Request, case_id: str, user: str) -> Case:
+    case = _own_case(request, case_id, user)
+    if case.status != "DRAFT":
+        raise HTTPException(409, "This case was already submitted")
+    return case
+
+
+@router.post("/cases/{case_id}/files", status_code=201)
+async def add_file(case_id: str, request: Request, file: UploadFile, card_id: str = Form(),
+                   user: str = Depends(current_user)):
+    """Step 2 of 3: one file into one card (Cloud Run caps a request body at 32 MB, so never all at once)."""
+    deps = _deps(request)
+    case = _draft(request, case_id, user)
+    card = next((c for c in case.cards if c.id == card_id), None)
+    if card is None:
+        raise HTTPException(400, f"no card {card_id!r} in this case")
+    data, ext, pages = await _validated(card_id, file, deps.settings)
+    index = len(card.files)
+    key = f"cases/{case_id}/{card_id}/{index}.{ext}"
+    deps.storage.put(key, data, CONTENT_TYPES[ext])
+    card.files.append(CaseFile(key=key, name=file.filename or key, content_type=CONTENT_TYPES[ext], pages=pages))
+    deps.db.update_case(case_id, cards=case.cards)
+    return {"card_id": card_id, "index": index, "pages": pages}
+
+
+@router.post("/cases/{case_id}/submit")
+def submit_case(case_id: str, request: Request, user: str = Depends(current_user)):
+    """Step 3 of 3: check the totals and queue the analysis."""
+    deps = _deps(request)
+    settings = deps.settings
+    case = _draft(request, case_id, user)
+    cards = [c for c in case.cards if c.files]
+    if not any(stream_of(c) == "policy" for c in cards):
+        raise HTTPException(400, "add the policy")
+    if not any(stream_of(c) == "claim" for c in cards):
+        raise HTTPException(400, "add the claim documents")
+    files = [f for c in cards for f in c.files]
+    if len(files) > settings.max_files:
+        raise HTTPException(400, f"more than {settings.max_files} files")
+    if sum(f.pages for f in files) > settings.max_pages:
+        raise HTTPException(400, f"more than {settings.max_pages} pages")
+    deps.db.update_case(case_id, status="QUEUED", cards=cards)
     deps.jobs.enqueue("run_case", {"case_id": case_id})
     return {"case_id": case_id, "status": "QUEUED"}
 
@@ -94,7 +149,7 @@ def list_cases(request: Request, user: str = Depends(current_user)):
     db = _deps(request).db
     return [{**c.model_dump(mode="json", include={"id", "status", "risk", "score", "created_at", "progress",
                                                   "findings_count"}), "unseen": _unseen(c)}
-            for c in (_expire_if_stale(db, c) for c in db.list_cases(user))]
+            for c in (_expire_if_stale(db, c) for c in db.list_cases(user)) if c.status != "DRAFT"]
 
 
 @router.get("/cases/{case_id}")
@@ -104,8 +159,11 @@ def get_case(case_id: str, request: Request, user: str = Depends(current_user)):
     case = _expire_if_stale(db, case)
     if _unseen(case):
         case = db.update_case(case_id, seen_at=now())
+    cards = cards_of(case)
     return {
         **case.model_dump(mode="json"),
+        "cards": [{"id": c.id, "role": c.role, "kind": c.kind, "label": card_label(cards, c.id),
+                   "files": [{"name": f.name, "pages": f.pages} for f in c.files]} for c in cards],
         "findings": [f.model_dump(mode="json") for f in db.get_findings(case_id)],
         "pages": [p.model_dump(mode="json", include={"doc", "page", "kind", "width", "height"})
                   for p in db.get_pages(case_id)],

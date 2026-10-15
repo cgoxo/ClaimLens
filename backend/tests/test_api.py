@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from claimlens.deps import build_deps
 from claimlens.main import create_app
-from tests.conftest import SAMPLES
+from tests.conftest import SAMPLES, upload_case
 
 A = {"X-Dev-User": "a@x.com"}
 
@@ -21,13 +21,10 @@ def client(settings):
     return _client(settings)
 
 
-def _files(claim=None, claim_name="claim.pdf"):
-    return {"claim": (claim_name, claim or (SAMPLES / "claim.pdf").read_bytes(), "application/pdf"),
-            "policy": ("policy.pdf", (SAMPLES / "policy.pdf").read_bytes(), "application/pdf")}
-
-
-def _upload(client, headers=A, **kw):
-    return client.post("/api/cases", files=_files(**kw), headers=headers)
+def _upload(client, headers=A, claim=None, claim_name="claim.pdf"):
+    return upload_case(client, headers, files=[
+        ("claim-form", claim_name, claim or (SAMPLES / "claim.pdf").read_bytes()),
+        ("policy", "policy.pdf", (SAMPLES / "policy.pdf").read_bytes())])
 
 
 def test_requires_dev_header(client):
@@ -37,7 +34,7 @@ def test_requires_dev_header(client):
 
 def test_upload_and_get_ready(client):
     r = _upload(client)
-    assert r.status_code == 201 and r.json()["status"] == "QUEUED"
+    assert r.status_code == 200 and r.json()["status"] == "QUEUED"
     case = client.get(f"/api/cases/{r.json()['case_id']}", headers=A).json()
     assert case["status"] == "READY"
     assert len(case["findings"]) == 9
@@ -100,7 +97,7 @@ def test_too_many_pages_400(settings):
 
 def test_daily_limit_429(settings):
     c = _client(settings.model_copy(update={"daily_case_limit": 1}))
-    assert _upload(c).status_code == 201
+    assert _upload(c).status_code == 200
     assert _upload(c).status_code == 429
 
 

@@ -3,6 +3,7 @@
 import logging
 import time
 
+from claimlens.cards import cards_of, stream_of
 from claimlens.logs import case_logger
 from claimlens.pipeline.checks import ALL_CHECKS
 from claimlens.pipeline.checks.coverage import policy_start, treated_date
@@ -72,7 +73,8 @@ def run_pipeline(case_id: str, deps) -> None:
         case = db.get_case(case_id)
         clog = case_logger(case_id, case.owner_email)
         step = "READING"
-        files = {doc: (deps.storage.get(key), key.rsplit("/", 1)[-1]) for doc, key in case.files.items()}
+        # bridge until reading is card-aware: one stream per card role, files in card order
+        files = {f"{stream_of(c)}": (deps.storage.get(f.key), f.name) for c in cards_of(case) for f in c.files}
         total = sum(open_document(data, name).page_count for data, name in files.values())
         status("READING", "Reading the documents", total)
         read, done = ReadResult(), 0
@@ -86,7 +88,8 @@ def run_pipeline(case_id: str, deps) -> None:
         for doc, (data, name) in files.items():
             read.extend(read_document(doc, data, name, case_id, deps.storage, deps.ocr, on_page=on_page))
         db.put_pages(case_id, read.pages)
-        ctx = Ctx(case_id=case_id, read=read, deps=deps, files=dict(case.files))
+        ctx = Ctx(case_id=case_id, read=read, deps=deps,
+                  files={stream_of(c): f.key for c in cards_of(case) for f in c.files})
 
         status("CHECKING", "Extracting facts with Gemini")
         extract(ctx)

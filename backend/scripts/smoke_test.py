@@ -24,11 +24,14 @@ def main() -> int:
 
     with httpx.Client(base_url=args.base_url, headers=headers, timeout=60) as http:
         print("health:", http.get("/health").json())
-        files = {"claim": ("claim.pdf", (SAMPLES / "claim.pdf").read_bytes(), "application/pdf"),
-                 "policy": ("policy.pdf", (SAMPLES / "policy.pdf").read_bytes(), "application/pdf")}
-        r = http.post("/api/cases", files=files)
+        cards = [{"id": "claim-form", "role": "claim_form"}, {"id": "policy", "role": "policy"}]
+        r = http.post("/api/cases", json={"cards": cards})
         r.raise_for_status()
         case_id = r.json()["case_id"]
+        for card_id, name in (("claim-form", "claim.pdf"), ("policy", "policy.pdf")):
+            http.post(f"/api/cases/{case_id}/files", data={"card_id": card_id},
+                      files={"file": (name, (SAMPLES / name).read_bytes(), "application/pdf")}).raise_for_status()
+        http.post(f"/api/cases/{case_id}/submit").raise_for_status()
         print("case:", case_id)
         deadline = time.time() + args.timeout
         case = {"status": "QUEUED"}
