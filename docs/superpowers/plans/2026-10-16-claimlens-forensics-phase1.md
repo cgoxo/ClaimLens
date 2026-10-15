@@ -6,7 +6,7 @@
 
 **Architecture:**
 - A `claimlens/pipeline/forensics/` package holds the image loading, the `Detector` protocol, five classical detectors and the Gemini close-up detector. Phase 2 reuses all of it.
-- CAT-Net lives in `forensics/catnet/` with its own pinned environment, and is run over the set by a CLI.
+- CAT-Net lives in `forensics/catnet/` as a container built by Cloud Build. It runs **on a cloud GPU only** (a Cloud Run Job, L4, asia-southeast1) over the set uploaded to the bucket. Nothing heavy runs on the user's Mac.
 - `backend/eval/forensics/` generates the set (fictional bills turned into phone-like photos, controls and forgeries) and scores every detector at field level.
 
 **Tech Stack:** Python 3.12, NumPy, OpenCV (`opencv-python-headless`), Pillow, PyMuPDF, rapidfuzz · Gemini `gemini-3.1-flash-image` (forgeries) and `gemini-2.5-flash` (close-up) on Vertex · CAT-Net (PyTorch, jpegio).
@@ -24,6 +24,7 @@
   - forgeries use `gemini-3.1-flash-image` (location `global`);
   - the close-up check uses `gemini-2.5-flash`;
   - both are cached on disk by a content hash, so reruns cost nothing.
+- **CAT-Net runs in the cloud only:** user decision. The container is built by Cloud Build and run as the Cloud Run Job `claimlens-forensics` (L4, no zonal redundancy, asia-southeast1, 4 vCPU, 16 GiB, 0 retries, task timeout 3,600 s). Only the fictional eval set is processed there in Phase 1. Phase 1 GPU and build cost is about $1. The Terraform apply needs the user's yes before it runs.
 - **Data:**
   - the set goes in `backend/data/eval/forensics/` (gitignored);
   - only `docs/eval/forensics-<date>.md` and the generator and harness code are committed;
@@ -190,28 +191,59 @@
 - [ ] **Step 4:** `.venv/bin/pytest -q`. Expected: all pass.
 - [ ] **Step 5: Commit** `feat(forensics): Gemini close-up detector (to be measured)`.
 
-### Task 5: CAT-Net runner (for measurement)
+### Task 5: CAT-Net on a cloud GPU (for measurement)
 
 **Files:**
 - Create:
-  - `forensics/catnet/README.md`, `LICENSES.md`, `requirements.txt` (pinned)
-  - `forensics/catnet/get_weights.sh` (downloads with sha256 check)
-  - `forensics/catnet/run_dir.py`
-  - `forensics/catnet/Dockerfile` (fallback)
-- Test: `forensics/catnet/test_smoke.py` (run in the CAT-Net environment, not the backend suite)
+  - `forensics/catnet/README.md`, `LICENSES.md`
+  - `forensics/catnet/vendor/` (upstream CAT-Net at a pinned commit, keeping its LICENSE files)
+  - `forensics/catnet/requirements.txt` (pinned)
+  - `forensics/catnet/run_job.py`
+  - `forensics/catnet/Dockerfile` (CUDA 12 runtime base, pinned PyTorch, `jpegio`, weights fetched at build time with a sha256 check)
+  - `forensics/catnet/cloudbuild.yaml`
+  - `backend/infra/forensics.tf`
+  - `backend/eval/forensics/catnet_remote.py`
+- Test:
+  - `forensics/catnet/test_run_job.py`: runs **inside the container**, in the Cloud Build step after the image is built, on CPU with two tiny images.
+  - `backend/tests/forensics/test_catnet_remote.py`
 
 **Interfaces:**
-- **Code:** the upstream CAT-Net repository is vendored into `forensics/catnet/vendor/` at a pinned commit, keeping its LICENSE files.
-- **`run_dir.py --images <dir> --out <dir>`:** for each JPEG it writes `<name>.npy` (a float16 heatmap at the original size, EXIF-transposed to match `load_image`) and `timings.jsonl`. Non-JPEGs are skipped with `"n/a"`.
-- **Environment:** `python3.12 -m venv forensics/catnet/.venv`, with requirements pinned to the newest PyTorch the code runs on.
-  - If `jpegio` or the code can't run natively on arm64 macOS, **stop and ask the user** to start Docker Desktop (`docker run --platform linux/amd64`).
-  - No cloud resources are created in this phase.
+- **`run_job.py --images gs://<bucket>/eval/forensics/<run>/images --out gs://<bucket>/eval/forensics/<run>/catnet`:**
+  - for each JPEG, writes `<name>.npy` (a float16 heatmap at the original size, EXIF-transposed to match `load_image`);
+  - writes `timings.jsonl` and, last, `done.json` (`{"execution": $CLOUD_RUN_EXECUTION, "ok": [...], "errors": {...}, "na": [...]}`);
+  - non-JPEGs go to `na`;
+  - it uses the GPU when `torch.cuda.is_available()`, and the CPU otherwise.
+- **Terraform (`forensics.tf`):**
+  - `google_service_account.forensics` (`claimlens-forensics`), with `roles/storage.objectAdmin` on the claims bucket.
+  - `google_cloud_run_v2_job.forensics`:
+    - name `claimlens-forensics`, location `asia-southeast1`;
+    - template: 1 task, `max_retries = 0`, `timeout = "3600s"`;
+    - container `var.forensics_image`, with limits `cpu = "4"`, `memory = "16Gi"`, `nvidia.com/gpu = "1"`;
+    - `node_selector { accelerator = "nvidia-l4" }`, `gpu_zonal_redundancy_disabled = true`.
+  - The `claimlens-api` account gets `roles/run.developer` on **this job only** (`google_cloud_run_v2_job_iam_member`), so Phase 2 can start it.
+  - The `claimlens-forensics` service account is the job's runtime identity.
+  - `variables.tf` gets `forensics_image` (Artifact Registry path).
+- **`catnet_remote.run(manifest, bucket, run_id) -> Path`:**
+  1. uploads the set's JPEGs to `gs://<bucket>/eval/forensics/<run_id>/images/`;
+  2. runs `gcloud run jobs execute claimlens-forensics --region asia-southeast1 --args=... --wait`;
+  3. downloads `catnet/*.npy` and `done.json` to `backend/data/eval/forensics/catnet/`;
+  4. returns that folder.
+  - Upload and download are idempotent, skipping objects already present.
+  - The execution name recorded in `done.json` must match the execution just run, or the results are refused.
+  - A failed execution raises with the job log URL.
 
-- [ ] **Step 1: Write the smoke test:** on one genuine sample JPEG and one with a q 60 patch pasted in, the heatmap shape equals the image size, and the patch area's mean is above the rest's 95th percentile.
-- [ ] **Step 2:** `get_weights.sh`, then `forensics/catnet/.venv/bin/python -m pytest forensics/catnet/test_smoke.py -q`. Expected: FAIL before `run_dir.py` exists.
-- [ ] **Step 3:** Implement `run_dir.py`. Record any code changes needed for the current PyTorch in `README.md`.
-- [ ] **Step 4:** Rerun the smoke test. Expected: PASS.
-- [ ] **Step 5: Commit** `feat(forensics): CAT-Net runner for measurement` (vendor code and scripts only, no weights).
+- [ ] **Step 1: Write failing tests:**
+  - `test_run_job.py`, in the container: on one genuine JPEG and one with a q 60 patch pasted in, the heatmap shape equals the image size; the patch area's mean is above the rest's 95th percentile; a PNG goes to `na`; `done.json` lists both JPEGs.
+  - `test_catnet_remote.py`, with `gcloud` and the storage client faked:
+    - the upload skips existing objects;
+    - a `done.json` from another execution is refused;
+    - a failed execution raises with the log URL.
+- [ ] **Step 2:** `.venv/bin/pytest tests/forensics/test_catnet_remote.py -q`. Expected: FAIL.
+- [ ] **Step 3:** Implement `run_job.py`, the Dockerfile, `cloudbuild.yaml` (build → run `test_run_job.py` inside the built image → push to `asia-south1-docker.pkg.dev/<project>/claimlens/claimlens-forensics:<sha>`) and `catnet_remote.py`. Record in `README.md` any changes needed to run the vendored code on the current PyTorch.
+- [ ] **Step 4:** `gcloud builds submit --config forensics/catnet/cloudbuild.yaml .` Expected: the in-image tests pass and the image is pushed (≈ $0.20).
+- [ ] **Step 5: Ask the user, then** run `terraform plan` (expect only `forensics.tf` resources) and `apply`.
+- [ ] **Step 6: Smoke on the GPU:** `catnet_remote.run` on a 2-image manifest. Expected: `done.json` ok for both, and the job log shows `cuda: True` (≈ $0.05).
+- [ ] **Step 7:** `.venv/bin/pytest -q` green. **Commit** `feat(forensics): CAT-Net as a GPU Cloud Run Job for measurement` (no weights in git).
 
 ### Task 6: Harness, run, report
 
@@ -245,6 +277,6 @@
 - [ ] **Step 4:** `.venv/bin/pytest -q`. Expected: all pass.
 - [ ] **Step 5: Run it.**
   - `python -m eval.forensics.make_set --bases 40` (≈ $8 of Gemini image edits; the set is cached).
-  - The CAT-Net run over the set's JPEGs.
+  - `python -m eval.forensics.catnet_remote` over the set's JPEGs, on the GPU job (≈ $0.65).
   - `python -m eval.forensics.score`, then `python -m eval.forensics.report`.
 - [ ] **Step 6: Commit** the report as `docs: forensics phase 1 measurement report`. **Stop here and share the numbers with the user** before any Phase 2 plan.
