@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import time
 from pathlib import Path
 from typing import Protocol
@@ -131,8 +132,9 @@ class VertexGemini:
                 code = getattr(e, "code", None)
                 if attempt == ATTEMPTS - 1 or not (code == 429 or (isinstance(code, int) and code >= 500)):
                     raise
-                log.warning("Gemini busy (%s), retrying in %ss", code, 4 * 2 ** attempt)
-                time.sleep(4 * 2 ** attempt)
+                wait = 4 * 2 ** attempt * random.uniform(0.75, 1.25)  # jitter: concurrent cases don't retry in step
+                log.warning("Gemini busy (%s), retrying in %.0fs", code, wait)
+                time.sleep(wait)
         raise RuntimeError("unreachable")
 
     def classify_documents(self, files_text: str) -> list[DocLabel]:
