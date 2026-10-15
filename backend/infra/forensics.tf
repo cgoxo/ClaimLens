@@ -4,7 +4,7 @@
 variable "forensics_image" {
   description = "CAT-Net image in Artifact Registry (built by forensics/catnet/cloudbuild.yaml)"
   type        = string
-  default     = ""
+  default     = "asia-south1-docker.pkg.dev/social-pulse-510513/claimlens/claimlens-forensics:1be417a"
 }
 
 resource "google_service_account" "forensics" {
