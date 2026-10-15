@@ -150,7 +150,7 @@ Thresholds are fixed from the other half. `gemini_closeup` and `catnet` must pas
 
 **Trigger.**
 - The pipeline calls the Cloud Run Admin API `jobs.run` with argument overrides, then **polls the execution** until it succeeds, fails or hits the timeout.
-- The job may run up to `max(1, 4)` concurrent executions.
+- Each execution is one task for one case. At most 4 executions run at once: the job queue's `max_concurrent_dispatches` (10) bounds cases, and the pipeline holds a semaphore of 4 around `jobs.run`.
 
 **Terraform:**
 - **The job itself:** `google_cloud_run_v2_job.forensics`, in asia-south1, with 4 vCPU, 8 GiB, a 600 s task timeout and 0 retries (the pipeline handles failure).
