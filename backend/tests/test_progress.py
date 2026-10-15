@@ -80,3 +80,29 @@ def test_stale_sets_finished_at(settings):
     db.create_case(Case(id="s1", owner_email="a@x.com", status="READING", created_at=old, updated_at=old))
     body = client.get("/api/cases/s1", headers=A).json()
     assert body["status"] == "FAILED" and body["finished_at"] is not None
+
+
+def test_stale_run_expires_in_the_list_too(settings):
+    client = _client(settings)
+    db = client.app.state.deps.db
+    old = now() - timedelta(minutes=20)
+    db.create_case(Case(id="s2", owner_email="a@x.com", status="READING", created_at=old, updated_at=old,
+                        progress={"step": "READING", "done": 3, "total": 9, "label": "x"}))
+    [row] = [r for r in client.get("/api/cases", headers=A).json() if r["id"] == "s2"]
+    assert row["status"] == "FAILED" and row["progress"] is None
+    case = db.get_case("s2")
+    assert case.finished_at is not None and case.error.startswith("Analysis was interrupted")
+
+
+def test_progress_write_failure_does_not_fail_the_case(tmp_path):
+    deps = _deps(tmp_path)
+    original = deps.db.update_case
+
+    def flaky(case_id, **fields):
+        if "progress" in fields and fields["progress"] is not None:
+            raise RuntimeError("deadline exceeded")
+        return original(case_id, **fields)
+
+    deps.db.update_case = flaky
+    run_pipeline(_new_case(deps), deps)
+    assert deps.db.get_case("c1").status == "READY"

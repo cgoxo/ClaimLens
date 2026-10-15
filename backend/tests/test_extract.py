@@ -79,3 +79,31 @@ def test_ocr_word_spans_give_a_box_for_a_multi_word_quote():
     ctx = Ctx(case_id="c1", read=read, deps=None)
     assert locate(ctx, "claim", 1, "Rs 13,500") == (True, (60, 50, 110, 60))
     assert locate(ctx, "claim", 1, "Rs 99,999") == (False, None)
+
+
+def test_column_major_form_quote_grounds_against_what_the_ai_read(tmp_path):
+    """Labels drawn first, values after: get_text() order differs from the row the AI was shown."""
+    import pymupdf
+
+    from claimlens.ocr import NoOcr
+    from claimlens.pipeline.context import Ctx
+    from claimlens.pipeline.extract import labelled_text, locate
+    from claimlens.pipeline.read import read_document
+    from claimlens.storage import LocalStorage
+
+    pdf = pymupdf.open()
+    page = pdf.new_page()
+    for y, label in ((100, "Patient Name:"), (120, "Hospital:")):
+        page.insert_text((50, y), label)
+    for y, value in ((100, "Ravi Kumar"), (120, "City Care, Pune")):
+        page.insert_text((200, y), value)
+    data = pdf.tobytes()
+    storage = LocalStorage(tmp_path)
+    storage.put("cases/c1/claim.pdf", data, "application/pdf")
+    read = read_document("claim", data, "claim.pdf", "c1", storage, NoOcr())
+    ctx = Ctx(case_id="c1", read=read, deps=type("D", (), {"storage": storage})(), files={"claim": "cases/c1/claim.pdf"})
+
+    assert "Patient Name:   Ravi Kumar" in labelled_text(read, "claim")
+    found, bbox = locate(ctx, "claim", 1, "Patient Name: Ravi Kumar")
+    assert found and bbox is not None
+    assert locate(ctx, "claim", 1, "Patient Name: Apollo Clinic") == (False, None)

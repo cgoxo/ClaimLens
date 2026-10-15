@@ -66,3 +66,19 @@ def test_pipeline_failure_logged_with_owner(tmp_path, caplog):
     run_pipeline(_new_case(deps), deps)
     [r] = [r for r in caplog.records if "failed during" in r.getMessage()]
     assert (r.case_id, r.user) == ("c1", "a@x.com")
+
+
+def test_unhandled_error_logged_as_500_with_user(settings, caplog):
+    from fastapi.testclient import TestClient
+
+    from claimlens.deps import build_deps
+    from claimlens.main import create_app
+
+    deps = build_deps(settings)
+    deps.db.list_cases = lambda owner: (_ for _ in ()).throw(RuntimeError("db down"))
+    client = TestClient(create_app(settings, deps), raise_server_exceptions=False)
+    caplog.set_level(logging.INFO)
+    assert client.get("/api/cases", headers=A).status_code == 500
+    [r] = _requests(caplog)
+    assert (r.status, r.user, r.levelname) == (500, "a@x.com", "ERROR")
+    assert r.exc_info and str(r.exc_info[1]) == "db down"

@@ -31,6 +31,14 @@ def _own_case(request: Request, case_id: str, user: str) -> Case:
     return case
 
 
+def _expire_if_stale(db, case: Case) -> Case:
+    """A run with no progress for STALE_AFTER died (e.g. the server restarted mid-run): record it as FAILED."""
+    if case.status in RUNNING and now() - case.updated_at > STALE_AFTER:
+        return db.update_case(case.id, status="FAILED", step=case.status, finished_at=now(), progress=None,
+                              error="Analysis was interrupted (server restarted). Please upload the claim again.")
+    return case
+
+
 def _unseen(case: Case) -> bool:
     """Finished since the owner last opened it."""
     return (case.status in FINISHED and case.finished_at is not None
@@ -83,19 +91,17 @@ async def create_case(request: Request, claim: UploadFile, policy: UploadFile, u
 
 @router.get("/cases")
 def list_cases(request: Request, user: str = Depends(current_user)):
+    db = _deps(request).db
     return [{**c.model_dump(mode="json", include={"id", "status", "risk", "score", "created_at", "progress",
                                                   "findings_count"}), "unseen": _unseen(c)}
-            for c in _deps(request).db.list_cases(user)]
+            for c in (_expire_if_stale(db, c) for c in db.list_cases(user))]
 
 
 @router.get("/cases/{case_id}")
 def get_case(case_id: str, request: Request, user: str = Depends(current_user)):
     case = _own_case(request, case_id, user)
     db = _deps(request).db
-    if case.status in RUNNING and now() - case.updated_at > STALE_AFTER:
-        # the background run died (e.g. the server restarted mid-run)
-        case = db.update_case(case_id, status="FAILED", step=case.status, finished_at=now(),
-                              error="Analysis was interrupted (server restarted). Please upload the claim again.")
+    case = _expire_if_stale(db, case)
     if _unseen(case):
         case = db.update_case(case_id, seen_at=now())
     return {

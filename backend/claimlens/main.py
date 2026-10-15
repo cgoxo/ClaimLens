@@ -27,14 +27,20 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
         if not path.startswith("/api/"):
             return await call_next(request)
         start = time.perf_counter()
-        response = await call_next(request)
-        status = response.status_code
+        error = None
+        try:
+            response = await call_next(request)
+            status = response.status_code
+        except Exception as e:
+            error, status = e, 500  # logged below with the caller, then re-raised for the 500 handler
         level = logging.ERROR if status >= 500 else logging.WARNING if status >= 400 else logging.INFO
         case = CASE_PATH.match(path)
         request_log.log(level, "%s %s %s", request.method, path, status, extra={
             "user": getattr(request.state, "user", None), "method": request.method, "path": path,
             "status": status, "latency_ms": round((time.perf_counter() - start) * 1000),
-            "case_id": case.group(1) if case else None})
+            "case_id": case.group(1) if case else None}, exc_info=error)
+        if error is not None:
+            raise error
         return response
 
     # not /healthz: Cloud Run reserves paths ending in "z"

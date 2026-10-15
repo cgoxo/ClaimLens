@@ -152,19 +152,23 @@ def covered_spans(read: ReadResult) -> list[tuple[Span, Drawing]]:
     return out
 
 
+def reading_lines(spans: list[Span]) -> list[list[Span]]:
+    """Spans grouped into visual lines (top to bottom), each line left to right."""
+    lines: list[list[Span]] = []
+    for s in sorted(spans, key=lambda s: (s.bbox[1], s.bbox[0])):
+        mid = (s.bbox[1] + s.bbox[3]) / 2
+        if lines and abs(mid - (lines[-1][0].bbox[1] + lines[-1][0].bbox[3]) / 2) < 3:
+            lines[-1].append(s)
+        else:
+            lines.append([s])
+    return [sorted(line, key=lambda s: s.bbox[0]) for line in lines]
+
+
 def visible_text(read: ReadResult, doc: str, page: int) -> str:
     """The page as a person sees it: digital pages rebuilt from spans, minus covered text."""
     info = next((p for p in read.pages if p.doc == doc and p.page == page), None)
     if info is None or info.kind != "digital":
         return info.text if info else ""
     hidden = {id(s) for s, _ in covered_spans(read)}
-    spans = sorted((s for s in read.spans if s.doc == doc and s.page == page and id(s) not in hidden),
-                   key=lambda s: (s.bbox[1], s.bbox[0]))
-    lines: list[list[Span]] = []
-    for s in spans:
-        mid = (s.bbox[1] + s.bbox[3]) / 2
-        if lines and abs(mid - (lines[-1][0].bbox[1] + lines[-1][0].bbox[3]) / 2) < 3:
-            lines[-1].append(s)
-        else:
-            lines.append([s])
-    return "\n".join("   ".join(s.text for s in sorted(line, key=lambda s: s.bbox[0])) for line in lines)
+    spans = [s for s in read.spans if s.doc == doc and s.page == page and id(s) not in hidden]
+    return "\n".join("   ".join(s.text for s in line) for line in reading_lines(spans))

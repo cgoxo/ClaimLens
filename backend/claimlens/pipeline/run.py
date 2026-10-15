@@ -27,8 +27,11 @@ class Progress:
 
     def _write(self, label: str, done: int, at: float | None = None) -> None:
         self.last = self.clock() if at is None else at
-        self.db.update_case(self.case_id, progress={"step": self.step_name, "done": done,
-                                                    "total": self.total, "label": label})
+        try:
+            self.db.update_case(self.case_id, progress={"step": self.step_name, "done": done,
+                                                        "total": self.total, "label": label})
+        except Exception:  # progress is cosmetic: never fail a case over it
+            log.warning("progress write failed for case %s", self.case_id, exc_info=True)
 
     def step(self, step: str, label: str, total: int = 0) -> None:
         self.step_name, self.total = step, total

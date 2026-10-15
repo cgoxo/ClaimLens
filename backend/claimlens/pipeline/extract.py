@@ -6,7 +6,7 @@ from rapidfuzz import fuzz
 
 from claimlens.models import Fact, WaitingPeriod
 from claimlens.pipeline.context import Ctx
-from claimlens.pipeline.read import ReadResult, visible_text
+from claimlens.pipeline.read import ReadResult, reading_lines, visible_text
 from claimlens.pipeline.text import normalise
 
 
@@ -38,14 +38,15 @@ def locate(ctx: Ctx, doc: str, page: int, quote: str) -> tuple[bool, tuple | Non
     best = max(ctx.spans_on(doc, page), key=lambda s: fuzz.partial_ratio(wanted, normalise(s.text)), default=None)
     if best is not None and fuzz.partial_ratio(wanted, normalise(best.text)) >= 90 and len(normalise(best.text)) >= len(wanted) * 0.9:
         return True, best.bbox
-    if wanted in normalise(ctx.page_text(doc, page)):
+    # compare with the page as the AI was shown it (rows rebuilt left to right), not the PDF's drawing order
+    if wanted in normalise(visible_text(ctx.read, doc, page)) or wanted in normalise(ctx.page_text(doc, page)):
         return True, _window_bbox(ctx.spans_on(doc, page), wanted)
     return False, None
 
 
 def _window_bbox(spans: list, wanted: str) -> tuple | None:
-    """Box around the shortest run of consecutive spans (e.g. OCR words) whose text contains the quote."""
-    spans = sorted(spans, key=lambda s: s.seqno)
+    """Box around the shortest run of spans, in reading order (e.g. OCR words, label + value), containing the quote."""
+    spans = [s for line in reading_lines(spans) for s in line]
     longest = min(len(spans), len(wanted.split()) + 2)  # a quote of n words spans at most n (+ split) spans
     for size in range(2, longest + 1):
         for i in range(len(spans) - size + 1):
