@@ -56,7 +56,12 @@ def paste_retype(jpg: bytes, box, value: str, quality: int) -> bytes | None:
     pil = Image.fromarray(img)
     d = ImageDraw.Draw(pil)
     d.rectangle((x0, y0, x1, y1), fill=paper)
-    d.text((x0, y0 - 2), value, fill=(40, 40, 48), font=ImageFont.load_default(size=max(10, int((y1 - y0) * 1.2))))
+    size = max(10, int((y1 - y0) * 1.2))
+    while size > 8 and d.textlength(value, font=ImageFont.load_default(size=size)) > x1 - x0:
+        size -= 1  # a forger fits the new value into the space the old one had
+    font = ImageFont.load_default(size=size)
+    top = y0 + max(0, ((y1 - y0) - (font.getbbox(value)[3] - font.getbbox(value)[1])) // 2) - font.getbbox(value)[1]
+    d.text((x0, top), value, fill=(40, 40, 48), font=font)
     out = _jpeg(np.asarray(pil), quality)
     return out if edit_is_local(jpg, out, box) else None
 

@@ -129,3 +129,11 @@ def test_image_editor_retries_rate_limits_then_gives_up(monkeypatch):
     assert editor.edit(b"x", "p") == b"png" and len(sleeps) >= 2 and sleeps[1] > sleeps[0]
     editor.client = type("Cl", (), {"models": Models(fail_times=99)})()
     assert editor.edit(b"x", "p") is None  # gives up after the last attempt
+
+
+def test_retyped_values_fit_the_original_field_on_every_bill():
+    kept = 0
+    for seed in range(20):
+        jpg, box, q, _ = _photo_and_field(seed)
+        kept += forge.paste_retype(jpg, box, "Rs 99,99,900", q) is not None  # a longer value than the original
+    assert kept == 20
