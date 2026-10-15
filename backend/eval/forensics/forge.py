@@ -155,7 +155,10 @@ class GeminiImageEditor:
         if response is None:
             log.warning("image model still busy after %d attempts", ATTEMPTS)
             return None
-        for part in (response.candidates or [None])[0].content.parts if response.candidates else []:
-            if getattr(part, "inline_data", None) and part.inline_data.data:
-                return part.inline_data.data
+        # a blocked or empty reply has no candidates, no content, or no parts: no edit
+        for candidate in response.candidates or []:
+            for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
+                if getattr(part, "inline_data", None) and part.inline_data.data:
+                    return part.inline_data.data
+        log.warning("image model returned no image")
         return None

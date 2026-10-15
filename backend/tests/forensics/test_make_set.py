@@ -137,3 +137,15 @@ def test_retyped_values_fit_the_original_field_on_every_bill():
         jpg, box, q, _ = _photo_and_field(seed)
         kept += forge.paste_retype(jpg, box, "Rs 99,99,900", q) is not None  # a longer value than the original
     assert kept == 20
+
+
+def test_image_editor_treats_an_empty_answer_as_no_edit():
+    class Models:
+        def generate_content(self, **kw):  # a blocked or empty reply: a candidate without parts
+            return type("R", (), {"candidates": [type("C", (), {"content": type("X", (), {"parts": None})()})()]})()
+
+    editor = forge.GeminiImageEditor.__new__(forge.GeminiImageEditor)
+    editor.model, editor.client = "m", type("Cl", (), {"models": Models()})()
+    assert editor.edit(b"x", "p") is None
+    Models.generate_content = lambda self, **kw: type("R", (), {"candidates": None})()
+    assert editor.edit(b"x", "p") is None
