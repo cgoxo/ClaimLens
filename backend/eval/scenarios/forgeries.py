@@ -89,6 +89,10 @@ FORGERIES: dict[str, Forgery] = {
     "bill_in_policy": Forgery(rejection=True),
     "policy_in_claim": Forgery(rejection=True),
 }
+FILE_EDITS = TAMPER | {"incremental_save"}
+FORGERIES["duplicate_page"].conflicts |= FILE_EDITS  # a duplicated edited file is reported twice: kept apart
+for name in FILE_EDITS:
+    FORGERIES[name].conflicts.add("duplicate_page")
 for name, f in FORGERIES.items():  # one tamper at a time; one claimed-amount change at a time; rejections alone
     if name in TAMPER:
         f.conflicts |= TAMPER - {name}
