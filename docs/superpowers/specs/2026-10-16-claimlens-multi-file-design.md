@@ -37,6 +37,7 @@ FileInfo+ card_id: str | None, key: str, first_page: int     # one per uploaded 
 - **Two streams, as today.** Every page belongs to the **claim** stream (claim_form, bill and supporting cards) or the **policy** stream (the policy card). Pages are numbered continuously within a stream, ordered by card (claim_form, then bills in card order, then supporting) and then by file order. Citations stay `claim p.N` / `policy p.N`, so every existing check works unchanged.
 - **Bills link to cards through pages.** A bill is tied to its card through `bill.page`.
 - **Old cases.** `cards_of(case)` turns an old `files` dict into one `claim_form` card and one `policy` card, so old cases flow through the same code.
+- **One bill card is one bill.** It holds every image or PDF of that bill (a long bill photographed in several parts), in page order. There is no cap per card beyond the case totals (40 files, 80 pages). `kind` is set once per card. Up to 10 bill cards means up to 10 *different* bills.
 - **Card labels** come from code, never the AI: `Claim form`, `Bill 2 · pharmacy`, `Supporting documents`, `Policy`.
 
 ## 3. Upload API (one file per request)
