@@ -34,3 +34,9 @@ def paint(shape, boxes: list, scores: list[float | None]) -> np.ndarray | None:
             x0, y0, x1, y1 = box
             heat[y0:y1, x0:x1] = np.maximum(heat[y0:y1, x0:x1], score)
     return heat
+
+
+def is_number(text: str) -> bool:
+    """A number field (amount, date, invoice no.), not a label that happens to contain a digit ("Item 1 …")."""
+    alnum = [c for c in text if c.isalnum()]
+    return bool(alnum) and sum(c.isdigit() for c in alnum) >= 0.5 * len(alnum)

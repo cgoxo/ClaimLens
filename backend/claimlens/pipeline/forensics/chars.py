@@ -4,14 +4,13 @@ An edited number usually differs from its neighbours in ink colour, the paper be
 Pages legitimately mix styles (a bold TOTAL), so colours are compared with every word, and sharpness only
 with words of the same style (height and stroke width)."""
 
-import re
 
 import cv2
 import numpy as np
 
 from claimlens.pipeline.forensics.image import ImageInfo
+from claimlens.pipeline.forensics.words import is_number
 
-NUMBER = re.compile(r"\d[\d,./-]*\d|\d")
 MIN_GROUP = 5
 
 
@@ -63,7 +62,7 @@ class _Chars:
         feats = np.array([f for _, _, f in rows])
         heat = np.zeros(grey.shape, np.float32)
         for i, (box, text, f) in enumerate(rows):
-            if not NUMBER.search(text):
+            if not is_number(text):
                 continue
             # ink and paper colour: compared with every word on the page (a bold line has the same ink)
             z = list(_z(f[3:], feats[:, 3:], slice(3, None)))
