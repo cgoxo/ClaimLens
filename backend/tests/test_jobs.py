@@ -121,3 +121,14 @@ def test_settings_cloudtasks_needs_sa_and_url(tmp_path, monkeypatch):
 def test_unknown_kind_needs_a_token_first(tmp_path, monkeypatch):
     # without a valid token, every kind looks the same: nothing to learn about which kinds exist
     assert _cloud_client(tmp_path, monkeypatch, False).post("/internal/jobs/nope", json={}).status_code == 403
+
+
+def test_job_callbacks_are_logged_with_the_job_as_the_user(tmp_path, monkeypatch, caplog):
+    import logging
+
+    client = _cloud_client(tmp_path, monkeypatch, True)
+    monkeypatch.setitem(jobs.HANDLERS, "run_case", lambda payload, deps, attempt: None)
+    caplog.set_level(logging.INFO)
+    client.post("/internal/jobs/run_case", json={"case_id": "c1"})
+    [r] = [r for r in caplog.records if r.name == "claimlens.request"]
+    assert (r.user, r.path, r.status) == ("tasks:run_case", "/internal/jobs/run_case", 200)

@@ -25,7 +25,7 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         path = request.url.path
-        if not path.startswith("/api/"):
+        if not path.startswith(("/api/", "/internal/")):
             return await call_next(request)
         start = time.perf_counter()
         error = None
