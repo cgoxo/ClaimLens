@@ -49,18 +49,18 @@ def ctx(tmp_path):
     return c
 
 
-DEFAULT_CARDS = [{"id": "claim-form", "role": "claim_form", "kind": None}, {"id": "policy", "role": "policy", "kind": None}]
+DEFAULT_CARDS = [{"id": "claim", "role": "claim"}, {"id": "policy", "role": "policy"}]
 
 
 def upload_case(client, headers=None, cards=None, files=None):
     """The three-step upload: create a draft, add each file, submit.
 
-    files: [(card_id, name, bytes)]; default is samples/claim.pdf as the claim form and samples/policy.pdf.
+    files: [(card_id, name, bytes)]; default is samples/claim.pdf as the claim and samples/policy.pdf.
     Returns the first response that failed, or the submit response.
     """
     headers = headers or {"X-Dev-User": "a@x.com"}
     if files is None:
-        files = [("claim-form", "claim.pdf", (SAMPLES / "claim.pdf").read_bytes()),
+        files = [("claim", "claim.pdf", (SAMPLES / "claim.pdf").read_bytes()),
                  ("policy", "policy.pdf", (SAMPLES / "policy.pdf").read_bytes())]
     r = client.post("/api/cases", json={"cards": cards or DEFAULT_CARDS}, headers=headers)
     if r.status_code >= 300:

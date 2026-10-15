@@ -5,8 +5,7 @@ from pydantic import BaseModel, Field as PydField
 
 Severity = Literal["critical", "high", "medium", "low", "coverage"]
 Status = Literal["DRAFT", "QUEUED", "READING", "CHECKING", "PROVING", "READY", "FAILED"]
-CardRole = Literal["claim_form", "bill", "supporting", "policy"]
-BillKind = Literal["hospital", "pharmacy", "lab", "other"]
+CardRole = Literal["claim", "policy"]
 PageKind = Literal["digital", "scanned", "scanned_with_text", "image", "unreadable"]
 SEVERITY_ORDER: list[str] = ["critical", "high", "medium", "low", "coverage"]
 
@@ -48,14 +47,15 @@ class CaseFile(BaseModel):
     name: str
     content_type: str = "application/pdf"
     pages: int = 0
+    client_id: str | None = None  # the browser's id for this file: a re-send after a lost response is a no-op
 
 
 class Card(BaseModel):
-    """A group of uploaded files the user says belong together: one bill, the claim form, the policy..."""
+    """One of the two upload forms: the claim (claim form, supporting documents and the one bill,
+    possibly photographed in several images) or the policy. Files are in page order."""
 
     id: str
     role: CardRole
-    kind: BillKind | None = None  # bills only
     files: list[CaseFile] = []
 
 

@@ -54,7 +54,7 @@ def test_progress_labels_and_cleared(tmp_path):
     deps = _deps(tmp_path)
     labels = _recorded(deps)
     run_pipeline(_new_case(deps), deps)
-    for label in ["Reading Claim form, page 1 (1 of 7)", "Reading Policy, page 3 (7 of 7)", "Extracting facts with Gemini",
+    for label in ["Reading claim.pdf, page 1 (1 of 7)", "Reading policy.pdf, page 3 (7 of 7)", "Extracting facts with Gemini",
                   "Checking: tamper", "Checking coverage with Gemini", "Proving findings"]:
         assert label in labels
     case = deps.db.get_case("c1")
@@ -119,3 +119,28 @@ def test_status_and_progress_share_writes(tmp_path):
     # 4 status writes (each carrying progress) + one per check + per file's first page + the last page
     assert len(calls) <= 4 + len(ALL_CHECKS) + 2 + 1
     assert {"status"} not in calls  # every status change carries its progress
+
+
+def test_files_are_fetched_one_at_a_time(settings, monkeypatch):
+    """Up to 40 files of 20 MB: fetch each just before reading it, never all of them first."""
+    from tests.conftest import upload_case
+
+    client = _client(settings)
+    deps = client.app.state.deps
+    events = []
+    get, read = deps.storage.get, __import__("claimlens.pipeline.run", fromlist=["read_document"]).read_document
+
+    def fetch(key):
+        if "/pages/" not in key:
+            events.append(("get", key.rsplit("/", 1)[-1]))
+        return get(key)
+
+    def reading(doc, data, name, *a, **kw):
+        events.append(("read", name))
+        return read(doc, data, name, *a, **kw)
+
+    monkeypatch.setattr(deps.storage, "get", fetch)
+    monkeypatch.setattr("claimlens.pipeline.run.read_document", reading)
+    assert upload_case(client).status_code == 200
+    kinds = [kind for kind, _ in events if kind in ("get", "read")]
+    assert kinds[:4] == ["get", "read", "get", "read"]

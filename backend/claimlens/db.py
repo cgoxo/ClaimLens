@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from claimlens.models import Case, Finding, PageInfo, now
+from claimlens.models import Case, CaseFile, Finding, PageInfo, now
 
 
 RUNNING = {"READING", "CHECKING", "PROVING"}
@@ -14,6 +14,17 @@ RUNNING = {"READING", "CHECKING", "PROVING"}
 def can_claim(case: Case, attempt: int) -> bool:
     """A delivery may run a case that is queued, or take over a running one from an earlier delivery."""
     return (case.status == "QUEUED" or case.status in RUNNING) and attempt > case.run_attempt
+
+
+def append_file(case: Case, card_id: str, file: CaseFile) -> tuple[int, Case]:
+    """Add a file to a card; a file the browser already sent (same client_id) is not added twice."""
+    card = next(c for c in case.cards if c.id == card_id)
+    if file.client_id:
+        for i, f in enumerate(card.files):
+            if f.client_id == file.client_id:
+                return i, case
+    card.files.append(file)
+    return len(card.files) - 1, case
 
 
 class Db(Protocol):
@@ -29,6 +40,7 @@ class Db(Protocol):
     def get_pages(self, case_id: str) -> list[PageInfo]: ...
     def get_invoice(self, key: str) -> dict | None: ...
     def claim_run(self, case_id: str, attempt: int) -> bool: ...
+    def add_case_file(self, case_id: str, card_id: str, file: CaseFile) -> int: ...
     def put_invoice(self, key: str, doc: dict) -> None: ...
 
 
@@ -95,6 +107,13 @@ class LocalDb:
                 return False
             self._write("cases", case_id, case.model_copy(update={"run_attempt": attempt}).model_dump(mode="json"))
             return True
+
+    def add_case_file(self, case_id: str, card_id: str, file: CaseFile) -> int:
+        with self._lock:
+            case = self.get_case(case_id)
+            index, case = append_file(case, card_id, file)
+            self._write("cases", case_id, case.model_dump(mode="json"))
+            return index
 
     # findings
     def put_findings(self, case_id: str, findings: list[Finding]) -> None:
@@ -175,6 +194,20 @@ class FirestoreDb:
             return True
 
         return claim(self.client.transaction())
+
+    def add_case_file(self, case_id: str, card_id: str, file: CaseFile) -> int:
+        from google.cloud import firestore
+
+        ref = self._case(case_id)
+
+        @firestore.transactional
+        def add(transaction) -> int:
+            case = Case.model_validate(ref.get(transaction=transaction).to_dict())
+            index, case = append_file(case, card_id, file)
+            transaction.update(ref, {"cards": case.model_dump(mode="json")["cards"], "updated_at": now().isoformat()})
+            return index
+
+        return add(self.client.transaction())
 
     def _owned(self, owner: str) -> list[Case]:
         docs = self.client.collection("cases").where("owner_email", "==", owner).stream()

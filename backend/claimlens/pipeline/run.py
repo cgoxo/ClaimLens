@@ -3,7 +3,7 @@
 import logging
 import time
 
-from claimlens.cards import card_label, cards_of, ordered
+from claimlens.cards import cards_of, ordered
 from claimlens.logs import case_logger
 from claimlens.pipeline.checks import ALL_CHECKS
 from claimlens.pipeline.checks.cards import duplicate_pages
@@ -54,14 +54,8 @@ def context_of(ctx: Ctx) -> dict:
     f, p = ctx.claim_facts, ctx.policy_facts
     start = policy_start(p) if p else None
     treated = treated_date(f) if f else None
-    claim = f.model_dump(mode="json", exclude_none=True) if f else None
-    if claim and ctx.cards:
-        card_of = {p.page: p.card_id for p in ctx.read.pages if p.doc == "claim"}
-        for bill in claim.get("bills", []):
-            if card_id := card_of.get(bill["page"]):
-                bill["card"] = card_label(ctx.cards, card_id)
     return {
-        "claim": claim,
+        "claim": f.model_dump(mode="json", exclude_none=True) if f else None,
         "policy": p.model_dump(mode="json", exclude_none=True) if p else None,
         "policy_age_months": months_between(start, treated) if start and treated else None,
     }
@@ -84,13 +78,13 @@ def run_pipeline(case_id: str, deps) -> None:
         tagged = bool(case.cards)  # cases from before cards keep untagged pages
         plan = [(stream, card, i, f) for stream in ("claim", "policy") for card in ordered(cards, stream)
                 for i, f in enumerate(card.files)]
-        blobs = {f.key: deps.storage.get(f.key) for _, _, _, f in plan}
-        total = sum(open_document(blobs[f.key], f.name).page_count for _, _, _, f in plan)
+        # page counts were stored at upload; only cases from before cards need their files opened to count
+        total = sum(f.pages or open_document(deps.storage.get(f.key), f.name).page_count for _, _, _, f in plan)
         status("READING", "Reading the documents", total)
         read, done, next_page = ReadResult(), 0, {"claim": 1, "policy": 1}
 
         for stream, card, i, f in plan:
-            label = card_label(cards, card.id)
+            label = f.name
 
             def on_page(doc: str, n: int, kind: str) -> None:
                 nonlocal done
@@ -98,7 +92,8 @@ def run_pipeline(case_id: str, deps) -> None:
                 verb = "Reading" if kind == "digital" else "OCR on"
                 progress.tick(f"{verb} {label}, page {n} ({done} of {total})", done, force=n == 1 or done == total)  # each file's start names its card
 
-            part = read_document(stream, blobs[f.key], f.name, case_id, deps.storage, deps.ocr, on_page=on_page,
+            data = deps.storage.get(f.key)  # one file in memory at a time: a claim can be 40 files of 20 MB
+            part = read_document(stream, data, f.name, case_id, deps.storage, deps.ocr, on_page=on_page,
                                  start_page=next_page[stream], card_id=card.id if tagged else None, key=f.key,
                                  file_index=i)
             next_page[stream] += len(part.pages)

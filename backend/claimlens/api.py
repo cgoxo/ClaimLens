@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from typing import Literal
 from uuid import uuid4
@@ -8,7 +9,7 @@ from pydantic import BaseModel
 
 from claimlens.auth import current_user
 from claimlens.cards import card_label, cards_of, layout_error, stream_of
-from claimlens.models import BillKind, Card, CardRole, Case, CaseFile, Review, now
+from claimlens.models import Card, CardRole, Case, CaseFile, Review, now
 from claimlens.pipeline.read import open_document
 
 RUNNING = {"QUEUED", "READING", "CHECKING", "PROVING"}
@@ -16,6 +17,7 @@ FINISHED = {"READY", "FAILED"}
 STALE_AFTER = timedelta(minutes=15)
 
 router = APIRouter(prefix="/api")
+log = logging.getLogger(__name__)
 
 ALLOWED = {"pdf", "jpg", "jpeg", "png"}
 CONTENT_TYPES = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
@@ -76,7 +78,6 @@ def me(user: str = Depends(current_user)):
 class CardIn(BaseModel):
     id: str
     role: CardRole
-    kind: BillKind | None = None
 
 
 class NewCase(BaseModel):
@@ -107,19 +108,26 @@ def _draft(request: Request, case_id: str, user: str) -> Case:
 
 @router.post("/cases/{case_id}/files", status_code=201)
 async def add_file(case_id: str, request: Request, file: UploadFile, card_id: str = Form(),
-                   user: str = Depends(current_user)):
+                   client_id: str | None = Form(None), user: str = Depends(current_user)):
     """Step 2 of 3: one file into one card (Cloud Run caps a request body at 32 MB, so never all at once)."""
     deps = _deps(request)
     case = _draft(request, case_id, user)
     card = next((c for c in case.cards if c.id == card_id), None)
     if card is None:
         raise HTTPException(400, f"no card {card_id!r} in this case")
-    data, ext, pages = await _validated(card_id, file, deps.settings)
-    index = len(card.files)
-    key = f"cases/{case_id}/{card_id}/{index}.{ext}"
+    if client_id and (sent := next(((i, f) for i, f in enumerate(card.files) if f.client_id == client_id), None)):
+        return {"card_id": card_id, "index": sent[0], "pages": sent[1].pages}  # a re-send: already have it
+    settings = deps.settings
+    held = [f for c in case.cards for f in c.files]
+    if len(held) >= settings.max_files:
+        raise HTTPException(400, f"at most {settings.max_files} files per claim")
+    data, ext, pages = await _validated(card_id, file, settings)
+    if sum(f.pages for f in held) + pages > settings.max_pages:
+        raise HTTPException(400, f"at most {settings.max_pages} pages per claim")
+    key = f"cases/{case_id}/{card_id}/{uuid4().hex[:12]}.{ext}"  # unique: uploads may arrive together
     deps.storage.put(key, data, CONTENT_TYPES[ext])
-    card.files.append(CaseFile(key=key, name=file.filename or key, content_type=CONTENT_TYPES[ext], pages=pages))
-    deps.db.update_case(case_id, cards=case.cards)
+    index = deps.db.add_case_file(case_id, card_id, CaseFile(
+        key=key, name=file.filename or key, content_type=CONTENT_TYPES[ext], pages=pages, client_id=client_id))
     return {"card_id": card_id, "index": index, "pages": pages}
 
 
@@ -140,7 +148,13 @@ def submit_case(case_id: str, request: Request, user: str = Depends(current_user
     if sum(f.pages for f in files) > settings.max_pages:
         raise HTTPException(400, f"more than {settings.max_pages} pages")
     deps.db.update_case(case_id, status="QUEUED", cards=cards)
-    deps.jobs.enqueue("run_case", {"case_id": case_id})
+    try:
+        deps.jobs.enqueue("run_case", {"case_id": case_id})
+    except Exception:
+        # nothing will run it: give the case back to the user, who can submit again
+        deps.db.update_case(case_id, status="DRAFT")
+        log.exception("case %s: enqueue failed", case_id)
+        raise HTTPException(503, "Couldn't start the analysis. Please try again.")
     return {"case_id": case_id, "status": "QUEUED"}
 
 
@@ -162,10 +176,10 @@ def get_case(case_id: str, request: Request, user: str = Depends(current_user)):
     cards = cards_of(case)
     return {
         **case.model_dump(mode="json"),
-        "cards": [{"id": c.id, "role": c.role, "kind": c.kind, "label": card_label(cards, c.id),
+        "cards": [{"id": c.id, "role": c.role, "label": card_label(cards, c.id),
                    "files": [{"name": f.name, "pages": f.pages} for f in c.files]} for c in cards],
         "findings": [f.model_dump(mode="json") for f in db.get_findings(case_id)],
-        "pages": [p.model_dump(mode="json", include={"doc", "page", "kind", "width", "height", "card_id"})
+        "pages": [p.model_dump(mode="json", include={"doc", "page", "kind", "width", "height", "card_id", "file_index"})
                   for p in db.get_pages(case_id)],
     }
 

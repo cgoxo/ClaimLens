@@ -23,7 +23,7 @@ def client(settings):
 
 def _upload(client, headers=A, claim=None, claim_name="claim.pdf"):
     return upload_case(client, headers, files=[
-        ("claim-form", claim_name, claim or (SAMPLES / "claim.pdf").read_bytes()),
+        ("claim", claim_name, claim or (SAMPLES / "claim.pdf").read_bytes()),
         ("policy", "policy.pdf", (SAMPLES / "policy.pdf").read_bytes())])
 
 

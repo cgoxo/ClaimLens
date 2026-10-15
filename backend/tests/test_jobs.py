@@ -97,7 +97,7 @@ def test_internal_endpoint_auth(tmp_path, monkeypatch):
     assert client.post("/internal/jobs/nope", json={}).status_code == 404
     seen = []
     monkeypatch.setitem(jobs.HANDLERS, "run_case", lambda payload, deps, attempt: seen.append((payload, attempt)))
-    r = client.post("/internal/jobs/run_case", json={"case_id": "c1"}, headers={"X-CloudTasks-TaskExecutionCount": "2"})
+    r = client.post("/internal/jobs/run_case", json={"case_id": "c1"}, headers={"X-CloudTasks-TaskRetryCount": "2"})
     assert r.status_code == 200 and seen == [({"case_id": "c1"}, 2)]
 
 
@@ -114,3 +114,8 @@ def test_verify_task_token_rejects_garbage(tmp_path):
 def test_settings_cloudtasks_needs_sa_and_url(tmp_path):
     with pytest.raises(ValueError):
         Settings(_env_file=None, data_dir=tmp_path, jobs="cloudtasks")
+
+
+def test_unknown_kind_needs_a_token_first(tmp_path, monkeypatch):
+    # without a valid token, every kind looks the same: nothing to learn about which kinds exist
+    assert _cloud_client(tmp_path, monkeypatch, False).post("/internal/jobs/nope", json={}).status_code == 403

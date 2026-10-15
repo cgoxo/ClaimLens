@@ -48,12 +48,16 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
     async def run_job(kind: str, request: Request):
         """Cloud Tasks calls back here; only a token signed for our tasks account is accepted."""
         deps = app.state.deps
-        if settings.jobs != "cloudtasks" or kind not in jobs.HANDLERS:
+        if settings.jobs != "cloudtasks":
             raise HTTPException(404, "Not found")
         if not jobs.verify_task_token(request.headers.get("Authorization", ""), settings):
             raise HTTPException(403, "Forbidden")
+        if kind not in jobs.HANDLERS:
+            raise HTTPException(404, "Not found")
         request.state.user = f"tasks:{kind}"
-        attempt = int(request.headers.get("X-CloudTasks-TaskExecutionCount", "0") or 0)
+        # RetryCount counts every earlier attempt, including ones that died (5xx, timeouts, killed instances);
+        # ExecutionCount would not, and a retry after a crash would then be refused by the run-once guard
+        attempt = int(request.headers.get("X-CloudTasks-TaskRetryCount", "0") or 0)
         await run_in_threadpool(jobs.HANDLERS[kind], await request.json(), deps, attempt)
         return {"ok": True}
 

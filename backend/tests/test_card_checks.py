@@ -1,52 +1,37 @@
 import pymupdf
 
-from claimlens.models import Bill, Card, ClaimFacts, Fact
+from claimlens.models import Card
 from claimlens.pipeline.checks.cards import check_cards, duplicate_pages
 from claimlens.pipeline.context import Ctx
 from claimlens.pipeline.extract import labelled_text
 from claimlens.pipeline.prove import prove
-from tests.test_read_cards import CLAIM, one_page, photo, read_cards
+from tests.test_read_cards import one_page, photo, read_cards
+
+CLAIM = [Card(id="claim", role="claim")]
 
 
-def _ctx(tmp_path, files, cards, bills=()):
-    storage, read = read_cards(tmp_path, files)
-    ctx = Ctx(case_id="c1", read=read, deps=type("D", (), {"storage": storage})(), cards=cards)
-    ctx.claim_facts = ClaimFacts(bills=list(bills))
-    return ctx
-
-
-def _bill(page, no):
-    return Bill(page=page, kind="hospital", invoice_no=Fact(value=no, page=page, quote=no))
+def _ctx(tmp_path, files):
+    storage, read = read_cards(tmp_path, [("claim", name, data) for name, data in files])
+    return Ctx(case_id="c1", read=read, deps=type("D", (), {"storage": storage})(), cards=CLAIM)
 
 
 def _codes(findings, code):
     return [f for f in findings if f.code == code]
 
 
-TWO_BILLS = [Card(id="b1", role="bill", kind="hospital"), Card(id="b2", role="bill", kind="pharmacy")]
-
-
-def test_bill_split_across_cards(tmp_path):
-    ctx = _ctx(tmp_path, [("b1", "a.pdf", one_page(3)), ("b2", "b.pdf", one_page(4))], TWO_BILLS,
-               [_bill(1, "INV-SEH-2026-0412"), _bill(2, "INV SEH 2026 0412")])
-    [f] = _codes(check_cards(ctx), "bill_split_across_cards")
-    assert f.severity == "high"
-    assert f.title == "Invoice INV-SEH-2026-0412 appears in two cards (Bill 1 · hospital, Bill 2 · pharmacy)"
-    assert [c.page for c in f.citations] == [1, 2]
-
-
-def test_mixed_bill_in_card(tmp_path):
-    cards = [Card(id="b1", role="bill", kind="hospital")]
-    ctx = _ctx(tmp_path, [("b1", "a.pdf", one_page(3)), ("b1", "b.pdf", one_page(4))], cards,
-               [_bill(1, "INV-SEH-2026-0412"), _bill(2, "PH-7781")])
-    [f] = _codes(check_cards(ctx), "mixed_bill_in_card")
-    assert f.severity == "medium"
-    assert f.title == "Bill 1 · hospital holds more than one bill (INV-SEH-2026-0412, PH-7781)"
+def _pdf(*pages: str) -> bytes:
+    doc = pymupdf.open()
+    for text in pages:
+        y = 80
+        for line in text.split("\n"):
+            doc_page = doc[-1] if y > 80 else doc.new_page()
+            doc_page.insert_text((50, y), line)
+            y += 16
+    return doc.tobytes()
 
 
 def test_duplicate_page_found_hidden_from_ai_and_proven(tmp_path):
-    ctx = _ctx(tmp_path, [("b1", "a.pdf", one_page(3)), ("b2", "b.pdf", one_page(4)), ("b2", "again.pdf", one_page(4))],
-               TWO_BILLS)
+    ctx = _ctx(tmp_path, [("bill.pdf", one_page(3)), ("pharmacy.pdf", one_page(4)), ("again.pdf", one_page(4))])
     assert [(a.page, b.page) for a, b in duplicate_pages(ctx.read)] == [(2, 3)]
     ctx.skip_pages = {("claim", 3)}
     assert "claim page 3" not in labelled_text(ctx.read, "claim", ctx.cards, ctx.skip_pages)
@@ -59,40 +44,51 @@ def test_duplicate_page_found_hidden_from_ai_and_proven(tmp_path):
 def test_look_alike_pages_with_different_numbers_are_not_duplicates(tmp_path):
     other = pymupdf.open(stream=one_page(4), filetype="pdf")
     page = other[0]
-    hit = page.search_for("Rs  3,000")[0]
-    page.add_redact_annot(hit, "Rs  3,900")
+    page.add_redact_annot(page.search_for("Rs  3,000")[0], "Rs  3,900")
     page.apply_redactions()
-    ctx = _ctx(tmp_path, [("b1", "a.pdf", one_page(4)), ("b2", "b.pdf", other.tobytes())], TWO_BILLS)
+    ctx = _ctx(tmp_path, [("a.pdf", one_page(4)), ("b.pdf", other.tobytes())])
+    assert duplicate_pages(ctx.read) == []
+
+
+def test_identical_boilerplate_pages_are_not_duplicates(tmp_path):
+    # a terms page repeated at the end of two documents: same words and numbers, but no amount or date
+    terms = ("Terms and conditions\nSunrise Eye & General Hospital, 12 MG Road, Pune 411001\n"
+             "GSTIN 27ABCDE1234F1Z5   Reg. No. 4471\nPhone 020 2611 0000. Payment is due on receipt.")
+    ctx = _ctx(tmp_path, [("bill.pdf", _pdf("Hospital bill INV-1 total Rs 45,500 on 13-Mar-2026", terms)),
+                          ("lab.pdf", _pdf("Lab report LR-9 total Rs 2,000 on 12-Mar-2026", terms))])
     assert duplicate_pages(ctx.read) == []
 
 
 def test_pages_without_text_are_not_compared(tmp_path):
-    ctx = _ctx(tmp_path, [("b2", "a.jpg", photo(4)), ("b2", "b.jpg", photo(4))], TWO_BILLS)  # OCR off
+    ctx = _ctx(tmp_path, [("a.jpg", photo(4)), ("b.jpg", photo(4))])  # OCR off
     assert duplicate_pages(ctx.read) == []
 
 
-def _numbered(*labels):
-    doc = pymupdf.open()
-    for label in labels:
-        doc.new_page().insert_text((50, 80), f"Hospital Bill INV-77 item {label}   Rs 1,000   {label}")
-    return doc.tobytes()
-
-
-def test_incomplete_bill(tmp_path):
-    cards = [Card(id="b1", role="bill", kind="hospital")]
-    ctx = _ctx(tmp_path, [("b1", "a.pdf", _numbered("Page 1 of 3", "Page 2 of 3"))], cards)
+def test_incomplete_claim(tmp_path):
+    ctx = _ctx(tmp_path, [("bill-1.pdf", _pdf("Bill INV-77   Rs 1,000   Page 1 of 3")),
+                          ("bill-2.pdf", _pdf("Bill INV-77   Rs 2,000   Page 2 of 3"))])
     [f] = _codes(check_cards(ctx), "incomplete_bill")
-    assert f.severity == "medium" and f.title == "Bill 1 · hospital is missing page 3 of 3"
+    assert f.severity == "medium" and f.title == "The claim is missing page 3 of 3"
 
 
-def test_slice_of_a_bigger_pack_is_not_incomplete(tmp_path):
-    # the sample hospital bill is page 3 of a 4-page claim pack: it starts at 3, so it is not a bill's own numbering
-    ctx = _ctx(tmp_path, [("b1", "a.pdf", one_page(3))], [Card(id="b1", role="bill", kind="hospital")])
+def test_documents_with_their_own_numbering_are_checked_separately(tmp_path):
+    ctx = _ctx(tmp_path, [("summary.pdf", _pdf("Discharge summary   Page 1 of 1")),
+                          ("bill.pdf", _pdf("Bill INV-77 Page 1 of 2", "Bill INV-77 Page 2 of 2"))])
     assert _codes(check_cards(ctx), "incomplete_bill") == []
 
 
-def test_clean_cards_give_nothing(tmp_path):
-    cards = [Card(id="claim-form", role="claim_form"), *TWO_BILLS]
-    ctx = _ctx(tmp_path, [("claim-form", "f.pdf", one_page(1)), ("b1", "a.pdf", one_page(3)),
-                          ("b2", "b.pdf", one_page(4))], cards, [_bill(2, "INV-SEH-2026-0412"), _bill(3, "PH-7781")])
+def test_slice_of_a_bigger_pack_is_not_incomplete(tmp_path):
+    # the sample hospital bill is page 3 of a 4-page claim pack: numbering that skips page 1 is not checked
+    ctx = _ctx(tmp_path, [("bill.pdf", one_page(3))])
+    assert _codes(check_cards(ctx), "incomplete_bill") == []
+
+
+def test_unreadable_page_makes_page_count_unknowable(tmp_path):
+    # page 4 of 4 is a photo and OCR is off: it may well be there, so say nothing
+    ctx = _ctx(tmp_path, [("a.pdf", one_page(1)), ("b.pdf", one_page(2)), ("c.pdf", one_page(3)), ("d.jpg", photo(4))])
+    assert _codes(check_cards(ctx), "incomplete_bill") == []
+
+
+def test_clean_claim_gives_nothing(tmp_path):
+    ctx = _ctx(tmp_path, [(f"{n}.pdf", one_page(n)) for n in (1, 2, 3, 4)])
     assert check_cards(ctx) == []

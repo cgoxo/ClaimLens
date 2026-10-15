@@ -6,27 +6,15 @@ from rapidfuzz import fuzz
 
 from claimlens.models import Fact, WaitingPeriod
 from claimlens.pipeline.context import Ctx
-from claimlens.cards import card_label
 from claimlens.models import Card
 from claimlens.pipeline.read import ReadResult, open_document, reading_lines, visible_text
 from claimlens.pipeline.text import normalise
 
 
-def _header_label(cards: list[Card], card_id: str) -> str:
-    card = next((c for c in cards if c.id == card_id), None)
-    if card is not None and card.role == "bill":
-        return card_label(cards, card_id).replace(" · ", " (") + ")"  # "Bill 2 (pharmacy)"
-    return card_label(cards, card_id)
-
-
 def labelled_text(read: ReadResult, doc: str, cards: list[Card] | None = None, skip=frozenset()) -> str:
     """What the AI reads: each page as a person sees it (text hidden under white boxes left out),
-    headed with its card, minus pages in `skip` (duplicate images)."""
-    def header(p) -> str:
-        card = f" · {_header_label(cards, p.card_id)}" if cards and p.card_id else ""
-        return f"=== {doc} page {p.page}{card} ==="
-
-    return "\n\n".join(f"{header(p)}\n{visible_text(read, doc, p.page)}"
+    minus pages in `skip` (the same page uploaded twice)."""
+    return "\n\n".join(f"=== {doc} page {p.page} ===\n{visible_text(read, doc, p.page)}"
                          for p in read.pages if p.doc == doc and (doc, p.page) not in skip)
 
 
