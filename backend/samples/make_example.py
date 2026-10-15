@@ -6,7 +6,8 @@ Creates two fictional PDFs in the same folder as this script:
                 the way a fraudster would (white box + retyped total,
                 saved again with an editing tool)
 
-Usage:  pip install reportlab pymupdf && python make_example.py [--clean]\n        --clean also writes claim_clean.pdf (the untampered claim)
+Usage:  pip install reportlab pymupdf && python make_example.py [--clean] [--cards]\n        --clean also writes claim_clean.pdf (the untampered claim)
+        --cards also writes cards/ (the claim split into upload cards, pharmacy bill as a JPG)
 """
 
 from pathlib import Path
@@ -145,6 +146,24 @@ def tamper(src, dst):
     doc.save(dst)
 
 
+def make_cards(original, tampered):
+    """The claim pack as a user would upload it in cards: one file per document, the pharmacy bill a photo.
+
+    Only the hospital bill carries the fraudster's edit and editing-tool metadata; the rest are untouched.
+    """
+    out = OUT / "cards"
+    out.mkdir(exist_ok=True)
+    clean, forged = pymupdf.open(original), pymupdf.open(tampered)
+    for name, src, n in (("claim-form.pdf", clean, 1), ("discharge-summary.pdf", clean, 2),
+                         ("hospital-bill.pdf", forged, 3)):
+        doc = pymupdf.open()
+        doc.insert_pdf(src, from_page=n - 1, to_page=n - 1)
+        doc.set_metadata(src.metadata)
+        doc.save(out / name)
+    clean[3].get_pixmap(dpi=150).save(out / "pharmacy-bill.jpg")
+    print("wrote cards/: claim-form.pdf, discharge-summary.pdf, hospital-bill.pdf, pharmacy-bill.jpg")
+
+
 if __name__ == "__main__":
     import sys
 
@@ -152,6 +171,8 @@ if __name__ == "__main__":
     original = OUT / "_claim_original.pdf"
     make_claim_original(original)
     tamper(original, OUT / "claim.pdf")
+    if "--cards" in sys.argv:
+        make_cards(original, OUT / "claim.pdf")
     if "--clean" in sys.argv:
         # the untouched hospital file, for negative tests
         original.replace(OUT / "claim_clean.pdf")

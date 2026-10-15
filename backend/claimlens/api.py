@@ -165,7 +165,7 @@ def get_case(case_id: str, request: Request, user: str = Depends(current_user)):
         "cards": [{"id": c.id, "role": c.role, "kind": c.kind, "label": card_label(cards, c.id),
                    "files": [{"name": f.name, "pages": f.pages} for f in c.files]} for c in cards],
         "findings": [f.model_dump(mode="json") for f in db.get_findings(case_id)],
-        "pages": [p.model_dump(mode="json", include={"doc", "page", "kind", "width", "height"})
+        "pages": [p.model_dump(mode="json", include={"doc", "page", "kind", "width", "height", "card_id"})
                   for p in db.get_pages(case_id)],
     }
 

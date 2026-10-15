@@ -79,3 +79,28 @@ def test_jpg_claim_ready_with_unreadable_page(tmp_path):
     assert case.status == "READY", case.error
     claim_pages = [p for p in deps.db.get_pages("c1") if p.doc == "claim"]
     assert [p.kind for p in claim_pages] == ["unreadable"]
+
+
+CARD_SAMPLE = [("claim-form", "claim_form", None, "claim-form.pdf"), ("b1", "bill", "hospital", "hospital-bill.pdf"),
+               ("b2", "bill", "pharmacy", "pharmacy-bill.jpg"), ("supporting", "supporting", None, "discharge-summary.pdf"),
+               ("policy", "policy", None, "../policy.pdf")]
+
+
+def test_multi_card_sample_end_to_end(settings):
+    from tests.conftest import upload_case
+    from tests.test_api import A, _client
+
+    client = _client(settings.model_copy(update={"fake_ai_dir": FAKE_AI.parent / "cards"}))
+    cards = [{"id": i, "role": r, "kind": k} for i, r, k, _ in CARD_SAMPLE]
+    files = [(i, name.rsplit("/", 1)[-1], (SAMPLES / "cards" / name).read_bytes()) for i, _, _, name in CARD_SAMPLE]
+    r = upload_case(client, A, cards=cards, files=files)
+    assert r.status_code == 200, r.text
+    case = client.get(f"/api/cases/{r.json()['case_id']}", headers=A).json()
+    assert case["status"] == "READY", case["error"]
+    codes = Counter(f["code"] for f in case["findings"])
+    assert {"font_outlier", "hidden_text", "editing_tool", "sum_mismatch", "name_mismatch", "waiting_period",
+            "room_rent_limit"} <= set(codes)
+    assert not {"bill_split_across_cards", "mixed_bill_in_card", "duplicate_page_image", "incomplete_bill"} & set(codes)
+    [tool] = [f for f in case["findings"] if f["code"] == "editing_tool"]
+    assert (tool["citations"][0]["doc"], tool["citations"][0]["page"]) == ("claim", 2)
+    assert [p["card_id"] for p in case["pages"] if p["doc"] == "claim"] == ["claim-form", "b1", "b2", "supporting"]

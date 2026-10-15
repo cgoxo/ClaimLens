@@ -1,0 +1,176 @@
+{
+ "hospital_name": {
+  "value": "Sunrise Eye & General Hospital, Pune",
+  "page": 1,
+  "quote": "Sunrise Eye & General Hospital, Pune"
+ },
+ "policy_number": {
+  "value": "EH-2025-778812",
+  "page": 1,
+  "quote": "EH-2025-778812"
+ },
+ "claimant_name": {
+  "value": "Rahul Verma",
+  "page": 1,
+  "quote": "Rahul Verma"
+ },
+ "admission_date": {
+  "value": "10-Mar-2026",
+  "page": 1,
+  "quote": "Date of admission: 10-Mar-2026"
+ },
+ "discharge_date": {
+  "value": "13-Mar-2026",
+  "page": 1,
+  "quote": "Date of discharge: 13-Mar-2026"
+ },
+ "claim_date": {
+  "value": "22-Mar-2026",
+  "page": 1,
+  "quote": "Date of claim: 22-Mar-2026"
+ },
+ "amount_claimed": {
+  "value": 51500,
+  "page": 1,
+  "quote": "Rs 51,500"
+ },
+ "diagnosis": {
+  "value": "Senile cataract, right eye",
+  "page": 4,
+  "quote": "Senile cataract, right eye"
+ },
+ "names": [
+  {
+   "value": "Rahul Verma",
+   "page": 1,
+   "quote": "Rahul Verma"
+  },
+  {
+   "value": "Rahul Varma",
+   "page": 4,
+   "quote": "Rahul Varma"
+  },
+  {
+   "value": "Rahul Verma",
+   "page": 2,
+   "quote": "Rahul Verma"
+  },
+  {
+   "value": "Rahul Verma",
+   "page": 3,
+   "quote": "Rahul Verma"
+  }
+ ],
+ "procedures": [
+  {
+   "name": {
+    "value": "Phacoemulsification with IOL implant",
+    "page": 4,
+    "quote": "Phacoemulsification with IOL implant"
+   },
+   "date": {
+    "value": "11-Mar-2026",
+    "page": 4,
+    "quote": "(11-Mar-2026)"
+   }
+  }
+ ],
+ "room": {
+  "rate_per_day": {
+   "value": 4500,
+   "page": 2,
+   "quote": "3 days x Rs 4,500"
+  },
+  "days": {
+   "value": 3,
+   "page": 2,
+   "quote": "3 days x Rs 4,500"
+  }
+ },
+ "bills": [
+  {
+   "page": 2,
+   "kind": "hospital",
+   "inpatient": true,
+   "invoice_no": {
+    "value": "INV-SEH-2026-0412",
+    "page": 2,
+    "quote": "INV-SEH-2026-0412"
+   },
+   "date": {
+    "value": "13-Mar-2026",
+    "page": 2,
+    "quote": "Bill date: 13-Mar-2026"
+   },
+   "line_items": [
+    {
+     "desc": "Room charges (3 days x Rs 4,500)",
+     "amount": {
+      "value": 13500,
+      "page": 2,
+      "quote": "Rs 13,500"
+     }
+    },
+    {
+     "desc": "Surgeon and OT charges",
+     "amount": {
+      "value": 22000,
+      "page": 2,
+      "quote": "Rs 22,000"
+     }
+    },
+    {
+     "desc": "Intraocular lens (IOL)",
+     "amount": {
+      "value": 8000,
+      "page": 2,
+      "quote": "8,000"
+     }
+    },
+    {
+     "desc": "Consumables",
+     "amount": {
+      "value": 2000,
+      "page": 2,
+      "quote": "2,000"
+     }
+    }
+   ],
+   "total": {
+    "value": 48500,
+    "page": 2,
+    "quote": "Rs 48,500"
+   }
+  },
+  {
+   "page": 3,
+   "kind": "pharmacy",
+   "inpatient": true,
+   "invoice_no": {
+    "value": "PH-7781",
+    "page": 3,
+    "quote": "PH-7781"
+   },
+   "date": {
+    "value": "15-Mar-2026",
+    "page": 3,
+    "quote": "Date: 15-Mar-2026"
+   },
+   "line_items": [
+    {
+     "desc": "Eye drops, antibiotics, IV fluids",
+     "amount": {
+      "value": 3000,
+      "page": 3,
+      "quote": "3,000"
+     }
+    }
+   ],
+   "total": {
+    "value": 3000,
+    "page": 3,
+    "quote": "3,000"
+   }
+  }
+ ]
+}
