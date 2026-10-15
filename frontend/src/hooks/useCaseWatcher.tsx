@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { ApiError } from "../api/client";
 import type { CaseSummary, Status } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import { useToast } from "../components/Toast";
@@ -22,36 +23,49 @@ export function CaseWatcherProvider({ children, intervalMs = 5000 }: { children:
   const { status, client } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  // navigate changes on every route change; keep refresh stable so navigation doesn't start extra polls
+  const go = useRef(navigate);
+  go.current = navigate;
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const last = useRef(new Map<string, Status>()); // status seen on the previous poll
   const notified = useRef(new Set<string>());
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const signedIn = status === "signedIn";
+  const active = useRef(signedIn);
+  active.current = signedIn;
+
+  // exactly one pending poll at a time, and none once signed out
+  const schedule = (run: () => void) => {
+    clearTimeout(timer.current);
+    if (active.current) timer.current = setTimeout(run, intervalMs);
+  };
 
   const refresh = useCallback(async () => {
     clearTimeout(timer.current);
     let list: CaseSummary[];
     try {
       list = await client.listCases();
-    } catch {
-      timer.current = setTimeout(() => void refresh(), intervalMs); // network blip: try again later
+    } catch (e) {
+      // signed out or refused: stop; anything else (a network blip): try again later
+      if (!(e instanceof ApiError && (e.status === 401 || e.status === 403))) schedule(() => void refresh());
       return;
     }
+    if (!active.current) return;
     for (const c of list) {
       const before = last.current.get(c.id);
       if (before && RUNNING.has(before) && FINAL.has(c.status) && !notified.current.has(c.id)) {
         notified.current.add(c.id);
         const open = () => {
           window.focus();
-          navigate(`/cases/${c.id}`);
+          go.current(`/cases/${c.id}`);
         };
         if (!notifyFinished(c, open)) toast(finishedText(c), open);
       }
       last.current.set(c.id, c.status);
     }
     setCases(list);
-    if (list.some((c) => RUNNING.has(c.status))) timer.current = setTimeout(() => void refresh(), intervalMs);
-  }, [client, intervalMs, navigate, toast]);
+    if (list.some((c) => RUNNING.has(c.status))) schedule(() => void refresh());
+  }, [client, intervalMs, toast]);
 
   const track = useCallback((id: string) => {
     if (!last.current.has(id) || FINAL.has(last.current.get(id)!)) last.current.set(id, "QUEUED");

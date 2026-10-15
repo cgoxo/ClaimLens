@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import type { Client } from "../api/client";
+import { ApiError, type Client } from "../api/client";
 import type { CaseSummary, Status } from "../api/types";
 import { AuthContext } from "../auth/AuthProvider";
 import { ToastProvider } from "../components/Toast";
@@ -27,24 +27,26 @@ function Probe() {
   );
 }
 
-function setup(lists: CaseSummary[][]) {
+function setup(lists: CaseSummary[][], listCases = vi.fn()) {
   let call = 0;
-  const listCases = vi.fn(async () => lists[Math.min(call++, lists.length - 1)]);
-  const auth = {
-    status: "signedIn" as const, email: "a@x.com", error: null, mode: "dev" as const,
-    signInGoogle: vi.fn(), signInDev: vi.fn(), signOut: vi.fn(), client: { listCases } as unknown as Client,
-  };
-  render(
-    <AuthContext.Provider value={auth}>
+  if (lists.length) listCases.mockImplementation(async () => lists[Math.min(call++, lists.length - 1)]);
+  const tree = (status: "signedIn" | "signedOut") => (
+    <AuthContext.Provider value={{
+      status, email: "a@x.com", error: null, mode: "dev" as const,
+      signInGoogle: vi.fn(), signInDev: vi.fn(), signOut: vi.fn(), client: { listCases } as unknown as Client,
+    }}>
       <ToastProvider>
         <MemoryRouter>
           <CaseWatcherProvider><Probe /></CaseWatcherProvider>
         </MemoryRouter>
       </ToastProvider>
-    </AuthContext.Provider>,
+    </AuthContext.Provider>
   );
+  const { rerender } = render(tree("signedIn"));
+  setup.signOut = () => rerender(tree("signedOut"));
   return listCases;
 }
+setup.signOut = () => {};
 
 const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
@@ -111,4 +113,27 @@ test("tab title counts unseen finished cases", async () => {
   setup([[row("a", "READY", true), row("b", "FAILED", true), row("c", "READY")]]);
   await tick(0);
   expect(document.title).toBe("(2) ClaimLens");
+});
+
+test("signing out stops polling, even when two refreshes overlapped", async () => {
+  const listCases = setup([[row("a", "CHECKING")]]);
+  await tick(0);
+  // slow responses, so the timer's refresh and track()'s refresh are in flight together (as on upload)
+  listCases.mockImplementation(() => new Promise((done) => setTimeout(() => done([row("a", "CHECKING")]), 100)));
+  await tick(5000);
+  await act(async () => screen.getByText("track").click());
+  await tick(200);
+  setup.signOut();
+  const calls = listCases.mock.calls.length;
+  await tick(30000);
+  expect(listCases.mock.calls.length).toBe(calls);
+});
+
+test("a 401 or 403 is not retried", async () => {
+  const listCases = vi.fn(async () => { throw new ApiError(401, "Sign in required"); });
+  setup([], listCases);
+  await tick(0);
+  expect(listCases).toHaveBeenCalledTimes(1);
+  await tick(30000);
+  expect(listCases).toHaveBeenCalledTimes(1);
 });
