@@ -6,6 +6,7 @@ import time
 from claimlens.cards import card_label, cards_of, ordered
 from claimlens.logs import case_logger
 from claimlens.pipeline.checks import ALL_CHECKS
+from claimlens.pipeline.checks.cards import duplicate_pages
 from claimlens.pipeline.checks.coverage import policy_start, treated_date
 from claimlens.pipeline.checks.duplicate import register_invoices
 from claimlens.pipeline.context import Ctx
@@ -104,6 +105,7 @@ def run_pipeline(case_id: str, deps) -> None:
             read.extend(part)
         db.put_pages(case_id, read.pages)
         ctx = Ctx(case_id=case_id, read=read, deps=deps, cards=cards if tagged else [])
+        ctx.skip_pages = {("claim", later.page) for _, later in duplicate_pages(read)}  # never count a page twice
 
         status("CHECKING", "Extracting facts with Gemini")
         extract(ctx)

@@ -110,8 +110,7 @@ def read_document(doc: str, data: bytes, filename: str, case_id: str,
         else:
             kind = "digital"
 
-        pix = page.get_pixmap(dpi=DPI)
-        png = pix.tobytes("png")
+        png = page.get_pixmap(dpi=DPI).tobytes("png")
         png_key = f"cases/{case_id}/pages/{doc}/{index}.png"
         storage.put(png_key, png, "image/png")
 
@@ -128,8 +127,7 @@ def read_document(doc: str, data: bytes, filename: str, case_id: str,
         result.spans += spans
         result.pages.append(PageInfo(doc=doc, page=index, kind=kind, text=text,
                                      width=page.rect.width, height=page.rect.height, png_key=png_key,
-                                     card_id=card_id, file_index=file_index, file_page=file_page,
-                                     dhash=dhash_of(pix)))
+                                     card_id=card_id, file_index=file_index, file_page=file_page))
         for d in page.get_drawings():
             if d.get("fill") is not None and d.get("rect") is not None:
                 result.drawings.append(Drawing(doc=doc, page=index, rect=tuple(d["rect"]),
@@ -137,29 +135,6 @@ def read_document(doc: str, data: bytes, filename: str, case_id: str,
         if on_page:
             on_page(doc, file_page, kind)
     return result
-
-
-def dhash_of(pix: pymupdf.Pixmap) -> str:
-    """64-bit difference hash: shrink to 9x8 grey and compare each cell with its right neighbour.
-
-    Two photos or scans of the same page land within a few bits of each other.
-    """
-    grey = pymupdf.Pixmap(pymupdf.csGRAY, pix) if pix.n > 1 else pix
-    w, h, samples, stride = grey.width, grey.height, grey.samples, grey.stride
-
-    def cell(cx: int, cy: int) -> float:
-        x0, x1 = cx * w // 9, max(cx * w // 9 + 1, (cx + 1) * w // 9)
-        y0, y1 = cy * h // 8, max(cy * h // 8 + 1, (cy + 1) * h // 8)
-        step_x, step_y = max(1, (x1 - x0) // 8), max(1, (y1 - y0) // 8)  # sample, don't sum every pixel
-        values = [samples[y * stride + x] for y in range(y0, y1, step_y) for x in range(x0, x1, step_x)]
-        return sum(values) / len(values)
-
-    bits = 0
-    for cy in range(8):
-        row = [cell(cx, cy) for cx in range(9)]
-        for cx in range(8):
-            bits = bits << 1 | (row[cx] > row[cx + 1])
-    return f"{bits:016x}"
 
 
 def _overlap(a: tuple, b: tuple) -> float:

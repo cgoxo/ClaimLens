@@ -41,7 +41,6 @@ class PageInfo(BaseModel):
     card_id: str | None = None  # None for cases from before cards
     file_index: int = 0
     file_page: int = 0  # 1-based page within its file
-    dhash: str | None = None  # 64-bit difference hash of the page image, hex
 
 
 class CaseFile(BaseModel):
@@ -92,7 +91,7 @@ class Review(BaseModel):
 
 class Finding(BaseModel):
     id: str
-    check: Literal["tamper", "story", "duplicate", "coverage"]
+    check: Literal["tamper", "story", "duplicate", "cards", "coverage"]
     code: str
     severity: Severity
     title: str
