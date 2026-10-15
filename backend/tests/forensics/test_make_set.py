@@ -105,3 +105,27 @@ def test_labels_and_values_are_recorded_so_word_level_detectors_have_words():
     bill = render_bill(4)
     labels = [f for f in bill.fields if f.kind == "text"]
     assert len(labels) >= 6 and all(f.value for f in bill.fields)
+
+
+def test_image_editor_retries_rate_limits_then_gives_up(monkeypatch):
+    from google.genai import errors
+
+    sleeps = []
+    monkeypatch.setattr(forge.time, "sleep", lambda s: sleeps.append(s))
+
+    class Models:
+        def __init__(self, fail_times):
+            self.calls, self.fail_times = 0, fail_times
+
+        def generate_content(self, **kw):
+            self.calls += 1
+            if self.calls <= self.fail_times:
+                raise errors.ClientError(429, {"error": {"code": 429, "message": "exhausted", "status": "RESOURCE_EXHAUSTED"}})
+            part = type("P", (), {"inline_data": type("D", (), {"data": b"png"})()})()
+            return type("R", (), {"candidates": [type("C", (), {"content": type("X", (), {"parts": [part]})()})()]})()
+
+    editor = forge.GeminiImageEditor.__new__(forge.GeminiImageEditor)
+    editor.model, editor.client = "m", type("Cl", (), {"models": Models(fail_times=2)})()
+    assert editor.edit(b"x", "p") == b"png" and len(sleeps) >= 2 and sleeps[1] > sleeps[0]
+    editor.client = type("Cl", (), {"models": Models(fail_times=99)})()
+    assert editor.edit(b"x", "p") is None  # gives up after the last attempt

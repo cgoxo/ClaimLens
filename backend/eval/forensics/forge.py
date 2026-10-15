@@ -4,6 +4,7 @@
 import hashlib
 import io
 import logging
+import time
 from pathlib import Path
 from typing import Protocol
 
@@ -13,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 log = logging.getLogger(__name__)
 GREEN = (0, 220, 60)
+ATTEMPTS = 6  # waits of 10, 20, 40, 80, 160 s between them
 
 
 class ImageEditor(Protocol):
@@ -125,12 +127,28 @@ class GeminiImageEditor:
     def edit(self, png: bytes, prompt: str) -> bytes | None:
         from google.genai import types
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model, contents=[prompt, types.Part.from_bytes(data=png, mime_type="image/png")],
-                config=types.GenerateContentConfig(response_modalities=["IMAGE"]))
-        except Exception:
-            log.warning("image model call failed", exc_info=True)
+        from google.genai import errors
+
+        response = None
+        for attempt in range(ATTEMPTS):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model, contents=[prompt, types.Part.from_bytes(data=png, mime_type="image/png")],
+                    config=types.GenerateContentConfig(response_modalities=["IMAGE"]))
+                break
+            except (errors.ClientError, errors.ServerError) as e:
+                # 429 (quota) and 5xx are worth waiting for; anything else (a refusal, a bad request) is not
+                if getattr(e, "code", None) != 429 and not isinstance(e, errors.ServerError):
+                    log.warning("image model refused: %s", e)
+                    return None
+                wait = 10 * 2 ** attempt
+                log.info("image model busy (%s), retry in %ss", getattr(e, "code", "?"), wait)
+                time.sleep(wait)
+            except Exception:
+                log.warning("image model call failed", exc_info=True)
+                return None
+        if response is None:
+            log.warning("image model still busy after %d attempts", ATTEMPTS)
             return None
         for part in (response.candidates or [None])[0].content.parts if response.candidates else []:
             if getattr(part, "inline_data", None) and part.inline_data.data:
