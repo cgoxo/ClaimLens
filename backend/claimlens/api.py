@@ -85,7 +85,7 @@ async def create_case(request: Request, claim: UploadFile, policy: UploadFile, u
         files[doc] = f"cases/{case_id}/{doc}.{ext}"
         deps.storage.put(files[doc], data, CONTENT_TYPES[ext])
     deps.db.create_case(Case(id=case_id, owner_email=user, files=files))
-    request.app.state.start(case_id, deps)
+    deps.jobs.enqueue("run_case", {"case_id": case_id})
     return {"case_id": case_id, "status": "QUEUED"}
 
 

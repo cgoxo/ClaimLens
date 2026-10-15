@@ -8,6 +8,14 @@ from typing import Protocol
 from claimlens.models import Case, Finding, PageInfo, now
 
 
+RUNNING = {"READING", "CHECKING", "PROVING"}
+
+
+def can_claim(case: Case, attempt: int) -> bool:
+    """A delivery may run a case that is queued, or take over a running one from an earlier delivery."""
+    return (case.status == "QUEUED" or case.status in RUNNING) and attempt > case.run_attempt
+
+
 class Db(Protocol):
     def create_case(self, case: Case) -> None: ...
     def get_case(self, case_id: str) -> Case | None: ...
@@ -20,6 +28,7 @@ class Db(Protocol):
     def put_pages(self, case_id: str, pages: list[PageInfo]) -> None: ...
     def get_pages(self, case_id: str) -> list[PageInfo]: ...
     def get_invoice(self, key: str) -> dict | None: ...
+    def claim_run(self, case_id: str, attempt: int) -> bool: ...
     def put_invoice(self, key: str, doc: dict) -> None: ...
 
 
@@ -78,6 +87,14 @@ class LocalDb:
 
     def count_cases_since(self, owner: str, since: datetime) -> int:
         return sum(1 for c in self._all_cases() if c.owner_email == owner and c.created_at >= since)
+
+    def claim_run(self, case_id: str, attempt: int) -> bool:
+        with self._lock:
+            case = self.get_case(case_id)
+            if case is None or not can_claim(case, attempt):
+                return False
+            self._write("cases", case_id, case.model_copy(update={"run_attempt": attempt}).model_dump(mode="json"))
+            return True
 
     # findings
     def put_findings(self, case_id: str, findings: list[Finding]) -> None:
@@ -143,6 +160,21 @@ class FirestoreDb:
         data = case.model_dump(mode="json")
         self._case(case_id).update({k: data[k] for k in [*fields, "updated_at"]})
         return case
+
+    def claim_run(self, case_id: str, attempt: int) -> bool:
+        from google.cloud import firestore
+
+        ref = self._case(case_id)
+
+        @firestore.transactional
+        def claim(transaction) -> bool:
+            snap = ref.get(transaction=transaction)
+            if not snap.exists or not can_claim(Case.model_validate(snap.to_dict()), attempt):
+                return False
+            transaction.update(ref, {"run_attempt": attempt})
+            return True
+
+        return claim(self.client.transaction())
 
     def _owned(self, owner: str) -> list[Case]:
         docs = self.client.collection("cases").where("owner_email", "==", owner).stream()

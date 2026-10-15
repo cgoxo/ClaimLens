@@ -14,7 +14,7 @@ def settings(tmp_path, monkeypatch):
     # isolate from any developer .env / shell vars
     for var in ("STORAGE", "DB", "AI", "OCR", "AUTH_MODE", "APP_ENV", "BUCKET"):
         monkeypatch.delenv(var, raising=False)
-    return Settings(_env_file=None, data_dir=tmp_path, ai="fake", fake_ai_dir=FAKE_AI)
+    return Settings(_env_file=None, data_dir=tmp_path, ai="fake", fake_ai_dir=FAKE_AI, jobs="inline")
 
 
 def make_ctx(tmp_path, ai=None, claim="claim.pdf", policy="policy.pdf"):

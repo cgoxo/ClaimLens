@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ai: Literal["vertex", "fake"] = "vertex"
     ocr: Literal["off", "docai"] = "off"
     auth_mode: Literal["dev", "firebase"] = "dev"
+    jobs: Literal["inline", "thread", "cloudtasks"] = "thread"
 
     data_dir: Path = Path("./data")
     fake_ai_dir: Path = BACKEND_DIR / "tests" / "fixtures" / "ai" / "sample"
@@ -28,6 +29,10 @@ class Settings(BaseSettings):
     vertex_location: str = "global"
     docai_location: str = "us"
     docai_processor: str | None = None
+    tasks_queue: str = "claimlens-jobs"
+    tasks_location: str = "asia-south1"
+    tasks_sa: str | None = None  # the account Cloud Tasks signs its calls with
+    service_url: str | None = None  # this service's public URL: where tasks call back
 
     max_file_mb: int = 20
     max_pages: int = 80
@@ -41,6 +46,8 @@ class Settings(BaseSettings):
             raise ValueError("STORAGE=gcs needs BUCKET")
         if self.ocr == "docai" and not self.docai_processor:
             raise ValueError("OCR=docai needs DOCAI_PROCESSOR")
+        if self.jobs == "cloudtasks" and not (self.tasks_sa and self.service_url):
+            raise ValueError("JOBS=cloudtasks needs TASKS_SA and SERVICE_URL")
         if self.auth_mode == "dev" and self.app_env == "prod":
             raise ValueError("AUTH_MODE=dev is not allowed when APP_ENV=prod")
         return self

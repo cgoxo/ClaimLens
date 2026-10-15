@@ -11,6 +11,7 @@ class Deps:
     db: Any
     ai: Any
     ocr: Any
+    jobs: Any = None
 
 
 def build_deps(settings: Settings) -> Deps:
@@ -50,4 +51,8 @@ def build_deps(settings: Settings) -> Deps:
         from claimlens.ocr import NoOcr
 
         ocr = NoOcr()
-    return Deps(settings=settings, storage=storage, db=db, ai=ai, ocr=ocr)
+    from claimlens.jobs import build_jobs
+
+    deps = Deps(settings=settings, storage=storage, db=db, ai=ai, ocr=ocr)
+    deps.jobs = build_jobs(settings, deps)
+    return deps

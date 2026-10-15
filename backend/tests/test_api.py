@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from claimlens.deps import build_deps
 from claimlens.main import create_app
-from claimlens.pipeline.run import run_pipeline
 from tests.conftest import SAMPLES
 
 A = {"X-Dev-User": "a@x.com"}
@@ -14,7 +13,6 @@ def _client(settings):
     deps = build_deps(settings)
     deps.db.put_invoice("INVSEH20260412", {"invoice_no": "INV-SEH-2026-0412", "case_id": "CLM-1043"})
     app = create_app(settings, deps)
-    app.state.start = run_pipeline  # run synchronously in tests
     return TestClient(app)
 
 

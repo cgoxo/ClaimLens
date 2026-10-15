@@ -5,7 +5,9 @@ import time
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from claimlens import logs, runner
+from fastapi.concurrency import run_in_threadpool
+
+from claimlens import jobs, logs
 from claimlens.api import router
 from claimlens.deps import Deps, build_deps
 from claimlens.settings import Settings
@@ -19,7 +21,6 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
     logs.setup(settings.app_env)
     app = FastAPI(title="ClaimLens")
     app.state.deps = deps or build_deps(settings)
-    app.state.start = runner.start
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
@@ -42,6 +43,19 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
         if error is not None:
             raise error
         return response
+
+    @app.post("/internal/jobs/{kind}", include_in_schema=False)
+    async def run_job(kind: str, request: Request):
+        """Cloud Tasks calls back here; only a token signed for our tasks account is accepted."""
+        deps = app.state.deps
+        if settings.jobs != "cloudtasks" or kind not in jobs.HANDLERS:
+            raise HTTPException(404, "Not found")
+        if not jobs.verify_task_token(request.headers.get("Authorization", ""), settings):
+            raise HTTPException(403, "Forbidden")
+        request.state.user = f"tasks:{kind}"
+        attempt = int(request.headers.get("X-CloudTasks-TaskExecutionCount", "0") or 0)
+        await run_in_threadpool(jobs.HANDLERS[kind], await request.json(), deps, attempt)
+        return {"ok": True}
 
     # not /healthz: Cloud Run reserves paths ending in "z"
     @app.get("/health")
