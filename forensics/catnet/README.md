@@ -17,6 +17,15 @@ inside it on CPU, and pushes it:
 **Output.** For each JPEG: `<name>.npy`, a float16 map of P(edited) at the image's size in display
 orientation, and `<name>.time`. Non-JPEGs are listed as `na`. `done.json` is written last.
 
+## Where the weights come from
+
+The author's Google Drive copy of `CAT_full_v2.pth.tar` refuses downloads, so the build fetches the community copy
+at `huggingface.co/jtz18/CAT-NET`. Because it is a third-party file:
+- **Fixed checksum:** the SHA-256 is pinned (`_WEIGHTS_SHA256`), and the build fails if it changes;
+- **Safe loading:** it is loaded with `torch.load(weights_only=True)`, which refuses to run anything embedded in
+  the file;
+- **Strict shapes:** `load_state_dict(strict=True)` requires every tensor to match CAT-Net exactly.
+
 ## Changes to the vendored code
 
 None so far. It runs as-is on the pinned stack:

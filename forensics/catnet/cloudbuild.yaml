@@ -8,11 +8,14 @@ steps:
       - -c
       - |
         set -euo pipefail
-        pip install -q gdown==5.2.0
         mkdir -p weights
-        # only the full v2 model is needed (file id from the author's weights folder; other files there are
-        # training-only, and some are not publicly downloadable)
-        gdown "1anexqI_JlkO41wx7MgkRLf34VnpIzPw" -O weights/CAT_full_v2.pth.tar
+        # the author's Google Drive copy refuses downloads ("only owner and editors"); this is a community copy
+        # on Hugging Face (CC-BY 4.0 allows redistribution). Checked below, and loaded with weights_only=True.
+        python - <<'PY'
+        import urllib.request
+        urllib.request.urlretrieve("https://huggingface.co/jtz18/CAT-NET/resolve/main/CAT_full_v2.pth.tar",
+                                   "weights/CAT_full_v2.pth.tar")
+        PY
         sha="$(sha256sum weights/CAT_full_v2.pth.tar | cut -d' ' -f1)"
         echo "CAT_full_v2.pth.tar sha256 $sha"
         if [ -n "${_WEIGHTS_SHA256}" ] && [ "$sha" != "${_WEIGHTS_SHA256}" ]; then echo "weights checksum mismatch" >&2; exit 1; fi

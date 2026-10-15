@@ -41,8 +41,11 @@ def load_model(device: torch.device):
     update_config(config, argparse.Namespace(cfg=str(HERE / "experiments" / "CAT_full.yaml"), opts=[
         "TEST.MODEL_FILE", str(WEIGHTS), "TEST.FLIP_TEST", "False", "TEST.NUM_SAMPLES", "0"]))
     model = models.network_CAT.get_seg_model(config)
-    state = torch.load(str(WEIGHTS), map_location="cpu")
-    model.load_state_dict(state["state_dict"])
+    # weights_only: the file comes from a community mirror, and a pickle can carry code; this loader only
+    # accepts tensors and plain values, so anything else fails to load instead of running.
+    # strict: every tensor must exist in CAT-Net with the right shape, so a wrong or altered file fails too.
+    state = torch.load(str(WEIGHTS), map_location="cpu", weights_only=True)
+    model.load_state_dict(state["state_dict"], strict=True)
     return model.to(device).eval()
 
 
