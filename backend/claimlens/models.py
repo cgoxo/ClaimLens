@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, Field as PydField
+from pydantic import BaseModel, Field as PydField, field_validator
 
 Severity = Literal["critical", "high", "medium", "low", "coverage"]
 Status = Literal["DRAFT", "QUEUED", "READING", "CHECKING", "PROVING", "READY", "FAILED"]
@@ -57,6 +57,12 @@ class Card(BaseModel):
     id: str
     role: CardRole
     files: list[CaseFile] = []
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _earlier_roles(cls, role):
+        """Cases saved while the claim was split into claim-form, bill and supporting cards."""
+        return "claim" if role in ("claim_form", "bill", "supporting") else role
 
 
 class FileInfo(BaseModel):

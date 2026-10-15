@@ -37,6 +37,12 @@ def test_layout_errors(settings, cards, message):
     assert error == message if message is None else message in error
 
 
-def test_bill_role_is_gone():
+def test_unknown_role_is_refused():
     with pytest.raises(ValueError):
-        Card(id="b1", role="bill")
+        Card(id="b1", role="invoice")
+
+
+def test_cards_saved_with_the_earlier_roles_still_load():
+    # cases saved while cards had claim_form / bill / supporting roles read back as the claim
+    for role in ("claim_form", "bill", "supporting"):
+        assert Card.model_validate({"id": "x", "role": role, "kind": "hospital"}).role == "claim"
