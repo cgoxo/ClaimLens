@@ -10,16 +10,17 @@ from claimlens.pipeline.forensics.image import ImageInfo
 log = logging.getLogger(__name__)
 MIN_SIDE = 600  # smaller than this, there's too little detail to judge
 Box = tuple[float, float, float, float]  # x0, y0, x1, y1 in analysed-image pixels
+Word = tuple[Box, str]  # an OCR word: where it is and what it says
 
 
 class Detector(Protocol):
     name: str
 
     def applies(self, info: ImageInfo) -> bool: ...
-    def heatmap(self, img: np.ndarray, info: ImageInfo, words: list[Box]) -> np.ndarray | None: ...
+    def heatmap(self, img: np.ndarray, info: ImageInfo, words: list[Word]) -> np.ndarray | None: ...
 
 
-def safe_heatmap(detector: Detector, img: np.ndarray, info: ImageInfo, words: list[Box]) -> np.ndarray | None:
+def safe_heatmap(detector: Detector, img: np.ndarray, info: ImageInfo, words: list[Word]) -> np.ndarray | None:
     """Run one detector; anything that stops it from judging this image is "no opinion", never a crash."""
     if max(info.size) < MIN_SIDE:
         return None
