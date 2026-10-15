@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
+import { ToastProvider } from "./components/Toast";
 import CasePage from "./pages/CasePage";
 import LoginPage from "./pages/LoginPage";
 import UploadPage from "./pages/UploadPage";
@@ -15,6 +16,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <AuthProvider>
+      <ToastProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -23,6 +25,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }
