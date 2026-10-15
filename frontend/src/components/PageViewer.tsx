@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { Client } from "../api/client";
-import type { Citation, PageMeta } from "../api/types";
+import type { CaseCard, Citation, PageMeta } from "../api/types";
 import { toPercentBox } from "../lib/highlight";
 
 interface Props {
   caseId: string;
   pages: PageMeta[];
+  /** the case's cards, for grouping the page strip; empty for cases from before cards */
+  cards?: CaseCard[];
   selected: Citation | null;
   selectedNumber: number | null;
   selectedDetail: string;
@@ -16,7 +18,19 @@ interface Props {
 
 const DOCS = [["claim", "Claim"], ["policy", "Policy"]] as const;
 
-export default function PageViewer({ caseId, pages, selected, selectedNumber, selectedDetail, selectionKey = 0, client }: Props) {
+/** Consecutive pages of one card, labelled with the card; pages from before cards fall under the document. */
+function groups(pages: PageMeta[], cards: CaseCard[], doc: string): [string, PageMeta[]][] {
+  const out: [string, PageMeta[]][] = [];
+  for (const p of pages) {
+    const label = cards.find((c) => c.id === p.card_id)?.label ?? (doc === "claim" ? "Claim" : "Policy");
+    const last = out[out.length - 1];
+    if (last && last[0] === label) last[1].push(p);
+    else out.push([label, [p]]);
+  }
+  return out;
+}
+
+export default function PageViewer({ caseId, pages, cards = [], selected, selectedNumber, selectedDetail, selectionKey = 0, client }: Props) {
   const [doc, setDoc] = useState(selected?.doc ?? "claim");
   const [page, setPage] = useState(selected?.page ?? 1);
   const [src, setSrc] = useState<string | null>(null);
@@ -58,11 +72,16 @@ export default function PageViewer({ caseId, pages, selected, selectedNumber, se
           ))}
         </div>
         <div className="thumbs" aria-label="Pages">
-          {docPages.map((p) => (
-            <button key={p.page} className="thumb mono" aria-label={`${doc} page ${p.page}`}
-              aria-current={p.page === page ? "true" : undefined} onClick={() => setPage(p.page)}>
-              {p.page}
-            </button>
+          {groups(docPages, cards, doc).map(([label, group]) => (
+            <div key={label} role="group" aria-label={label} className="thumb-group">
+              <span className="thumb-group-label">{label}</span>
+              {group.map((p) => (
+                <button key={p.page} className="thumb mono" aria-label={`${doc} page ${p.page}`}
+                  aria-current={p.page === page ? "true" : undefined} onClick={() => setPage(p.page)}>
+                  {p.page}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       </div>

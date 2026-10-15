@@ -63,7 +63,7 @@ export default function CasePage() {
   const review = (f: Finding, action: "accept" | "dismiss", note: string) => client.review(id, f.id, action, note);
 
   const viewer = (selected: Finding | null) => data && (
-    <PageViewer caseId={data.id} pages={data.pages} client={client}
+    <PageViewer caseId={data.id} pages={data.pages} cards={data.cards} client={client}
       selected={pinned ?? selected?.citations[0] ?? null} selectionKey={selectionKey}
       selectedNumber={!pinned && selected ? findings.indexOf(selected) + 1 : null}
       selectedDetail={pinned ? pinned.quote : selected?.detail ?? ""} />
