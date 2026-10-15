@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     docai_processor: str | None = None
 
     max_file_mb: int = 20
-    max_pages: int = 60
+    max_pages: int = 80
+    max_files: int = 40
+    max_bill_cards: int = 10
     daily_case_limit: int = 20
 
     @model_validator(mode="after")

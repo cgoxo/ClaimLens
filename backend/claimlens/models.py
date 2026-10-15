@@ -4,7 +4,9 @@ from typing import Literal
 from pydantic import BaseModel, Field as PydField
 
 Severity = Literal["critical", "high", "medium", "low", "coverage"]
-Status = Literal["QUEUED", "READING", "CHECKING", "PROVING", "READY", "FAILED"]
+Status = Literal["DRAFT", "QUEUED", "READING", "CHECKING", "PROVING", "READY", "FAILED"]
+CardRole = Literal["claim_form", "bill", "supporting", "policy"]
+BillKind = Literal["hospital", "pharmacy", "lab", "other"]
 PageKind = Literal["digital", "scanned", "scanned_with_text", "image", "unreadable"]
 SEVERITY_ORDER: list[str] = ["critical", "high", "medium", "low", "coverage"]
 
@@ -30,16 +32,39 @@ class Span(BaseModel):
 
 class PageInfo(BaseModel):
     doc: str
-    page: int
+    page: int  # in its stream (claim or policy), across all the stream's files
     kind: PageKind
     text: str = ""
     width: float
     height: float
     png_key: str
+    card_id: str | None = None  # None for cases from before cards
+    file_index: int = 0
+    file_page: int = 0  # 1-based page within its file
+    dhash: str | None = None  # 64-bit difference hash of the page image, hex
+
+
+class CaseFile(BaseModel):
+    key: str
+    name: str
+    content_type: str = "application/pdf"
+    pages: int = 0
+
+
+class Card(BaseModel):
+    """A group of uploaded files the user says belong together: one bill, the claim form, the policy..."""
+
+    id: str
+    role: CardRole
+    kind: BillKind | None = None  # bills only
+    files: list[CaseFile] = []
 
 
 class FileInfo(BaseModel):
     doc: str
+    card_id: str | None = None
+    key: str = ""
+    first_page: int = 1  # stream page where this file starts
     producer: str = ""
     creator: str = ""
     created: str = ""
@@ -86,7 +111,9 @@ class Case(BaseModel):
     error: str | None = None
     created_at: datetime = PydField(default_factory=now)
     updated_at: datetime = PydField(default_factory=now)
-    files: dict[str, str] = {}
+    files: dict[str, str] = {}  # cases from before cards: {"claim": key, "policy": key}
+    cards: list[Card] = []
+    run_attempt: int = -1  # last job delivery that claimed this case (run-once guard)
     score: int | None = None
     risk: Literal["low", "review", "high"] | None = None
     payable: float | None = None
