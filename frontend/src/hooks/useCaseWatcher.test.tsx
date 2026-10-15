@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError, type Client } from "../api/client";
 import type { CaseSummary, Status } from "../api/types";
@@ -136,4 +137,34 @@ test("a 401 or 403 is not retried", async () => {
   expect(listCases).toHaveBeenCalledTimes(1);
   await tick(30000);
   expect(listCases).toHaveBeenCalledTimes(1);
+});
+
+test("a refresh asked for while one is in flight shares it", async () => {
+  function Twice() {
+    const { refresh } = useCaseWatcher();
+    useEffect(() => { void refresh(); }, [refresh]); // e.g. UploadPage on first load, beside the provider's own
+    return null;
+  }
+  const listCases = vi.fn(async () => [row("a", "READY")]);
+  render(
+    <AuthContext.Provider value={{
+      status: "signedIn", email: "a@x.com", error: null, mode: "dev" as const,
+      signInGoogle: vi.fn(), signInDev: vi.fn(), signOut: vi.fn(), client: { listCases } as unknown as Client,
+    }}>
+      <ToastProvider><MemoryRouter><CaseWatcherProvider><Twice /></CaseWatcherProvider></MemoryRouter></ToastProvider>
+    </AuthContext.Provider>,
+  );
+  await tick(0);
+  expect(listCases).toHaveBeenCalledTimes(1);
+});
+
+test("track during an older in-flight refresh still fetches again afterwards", async () => {
+  // the first list was requested before the upload, so it can't contain the new case
+  const listCases = vi.fn();
+  listCases.mockImplementationOnce(() => new Promise((done) => setTimeout(() => done([row("a", "READY")]), 100)));
+  setup([[row("a", "READY"), row("new1", "READY")]], listCases);
+  await act(async () => screen.getByText("track").click());
+  await tick(200);
+  expect(listCases).toHaveBeenCalledTimes(2);
+  expect(notifyFinished).toHaveBeenCalledTimes(1);
 });

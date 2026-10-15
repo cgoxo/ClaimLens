@@ -13,7 +13,7 @@ interface Watcher {
   cases: CaseSummary[];
   /** a case was just uploaded: poll now, and notify when it finishes even if that happens before the next poll */
   track(id: string): void;
-  refresh(): Promise<void>;
+  refresh(fresh?: boolean): Promise<void>;
 }
 
 const WatcherContext = createContext<Watcher>({ cases: [], track: () => {}, refresh: async () => {} });
@@ -40,7 +40,10 @@ export function CaseWatcherProvider({ children, intervalMs = 5000 }: { children:
     if (active.current) timer.current = setTimeout(run, intervalMs);
   };
 
-  const refresh = useCallback(async () => {
+  const inFlight = useRef<Promise<void> | null>(null);
+  const again = useRef(false); // a fresh list was asked for while an older request was out
+
+  const poll = useCallback(async () => {
     clearTimeout(timer.current);
     let list: CaseSummary[];
     try {
@@ -67,9 +70,25 @@ export function CaseWatcherProvider({ children, intervalMs = 5000 }: { children:
     if (list.some((c) => RUNNING.has(c.status))) schedule(() => void refresh());
   }, [client, intervalMs, toast]);
 
+  /** Fetch the list; a call while one is out shares it, and `fresh` asks for one more fetch after it. */
+  const refresh = useCallback((fresh = false): Promise<void> => {
+    if (inFlight.current) {
+      if (fresh) again.current = true;
+      return inFlight.current;
+    }
+    inFlight.current = poll().finally(() => {
+      inFlight.current = null;
+      if (again.current) {
+        again.current = false;
+        void refresh();
+      }
+    });
+    return inFlight.current;
+  }, [poll]);
+
   const track = useCallback((id: string) => {
     if (!last.current.has(id) || FINAL.has(last.current.get(id)!)) last.current.set(id, "QUEUED");
-    void refresh();
+    void refresh(true);
   }, [refresh]);
 
   useEffect(() => {

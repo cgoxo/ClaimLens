@@ -25,17 +25,21 @@ class Progress:
         self.db, self.case_id, self.clock = db, case_id, clock
         self.step_name, self.total, self.last = "", 0, None
 
-    def _write(self, label: str, done: int, at: float | None = None) -> None:
+    def _write(self, label: str, done: int, at: float | None = None, **fields) -> None:
         self.last = self.clock() if at is None else at
+        progress = {"step": self.step_name, "done": done, "total": self.total, "label": label}
+        if fields:  # carries real case fields (status, context): a failure must fail the case
+            self.db.update_case(self.case_id, progress=progress, **fields)
+            return
         try:
-            self.db.update_case(self.case_id, progress={"step": self.step_name, "done": done,
-                                                        "total": self.total, "label": label})
-        except Exception:  # progress is cosmetic: never fail a case over it
+            self.db.update_case(self.case_id, progress=progress)
+        except Exception:  # progress alone is cosmetic: never fail a case over it
             log.warning("progress write failed for case %s", self.case_id, exc_info=True)
 
-    def step(self, step: str, label: str, total: int = 0) -> None:
+    def step(self, step: str, label: str, total: int = 0, **fields) -> None:
+        """A new step; `fields` (e.g. status) go in the same write."""
         self.step_name, self.total = step, total
-        self._write(label, 0)
+        self._write(label, 0, **fields)
 
     def tick(self, label: str, done: int, force: bool = False) -> None:
         at = self.clock()
@@ -59,18 +63,18 @@ def run_pipeline(case_id: str, deps) -> None:
     db, step, clog = deps.db, "QUEUED", log
     progress = Progress(db, case_id)
 
-    def status(value: str) -> None:
+    def status(value: str, label: str, total: int = 0) -> None:
         nonlocal step
         step = value
-        db.update_case(case_id, status=value)
+        progress.step(value, label, total, status=value)
 
     try:
         case = db.get_case(case_id)
         clog = case_logger(case_id, case.owner_email)
-        status("READING")
+        step = "READING"
         files = {doc: (deps.storage.get(key), key.rsplit("/", 1)[-1]) for doc, key in case.files.items()}
         total = sum(open_document(data, name).page_count for data, name in files.values())
-        progress.step("READING", "Reading the documents", total=total)
+        status("READING", "Reading the documents", total)
         read, done = ReadResult(), 0
 
         def on_page(doc: str, n: int, kind: str) -> None:
@@ -84,20 +88,19 @@ def run_pipeline(case_id: str, deps) -> None:
         db.put_pages(case_id, read.pages)
         ctx = Ctx(case_id=case_id, read=read, deps=deps, files=dict(case.files))
 
-        status("CHECKING")
-        progress.step("CHECKING", "Extracting facts with Gemini")
+        status("CHECKING", "Extracting facts with Gemini")
         extract(ctx)
-        db.update_case(case_id, context=context_of(ctx))
-        progress.step("CHECKING", "Checking", total=len(ALL_CHECKS))
         findings = []
         for n, check in enumerate(ALL_CHECKS):
             name = check.__name__.removeprefix("check_")
             label = "Checking coverage with Gemini" if name == "coverage" else f"Checking: {name}"
-            progress.tick(label, n, force=True)
+            if n == 0:  # the context rides on the first check's progress write
+                progress.step("CHECKING", label, total=len(ALL_CHECKS), context=context_of(ctx))
+            else:
+                progress.tick(label, n, force=True)
             findings += check(ctx)
 
-        status("PROVING")
-        progress.step("PROVING", "Proving findings")
+        status("PROVING", "Proving findings")
         kept, dropped = prove(ctx, findings)
         kept = sort_findings(kept)
         db.put_findings(case_id, kept)

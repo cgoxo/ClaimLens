@@ -96,16 +96,28 @@ def _claimed_amount_mismatch(ctx: Ctx) -> list[Finding]:
     return []
 
 
+OCR_LOOKALIKES = str.maketrans({"O": "0", "I": "1", "L": "1"})
+
+
+def _policy_key(value) -> str:
+    """Letters and digits only, with the letters OCR confuses for digits read as digits."""
+    return re.sub(r"[^A-Z0-9]", "", str(value).upper()).translate(OCR_LOOKALIKES)
+
+
 def _policy_number_mismatch(ctx: Ctx) -> list[Finding]:
     claim, policy = ctx.claim_facts.policy_number, ctx.policy_facts.policy_number if ctx.policy_facts else None
     if not (claim and policy and claim.value and policy.value):
         return []
-    key = lambda v: re.sub(r"[^A-Z0-9]", "", str(v).upper())
-    if key(claim.value) == key(policy.value):
+    a, b = _policy_key(claim.value), _policy_key(policy.value)
+    if a == b:
         return []
-    finding = _finding("policy_number_mismatch", "high",
-                       f"Claim names policy {claim.value}, but the uploaded policy is {policy.value}",
-                       "The claim form and the policy document carry different policy numbers.", claim, 1)
+    if a in b or b in a:  # a renewal/endorsement suffix, or a member number inside a group policy number
+        severity, detail = "medium", ("One policy number contains the other: likely a renewal or endorsement "
+                                      "suffix, or a member number. Check it is the same policy.")
+    else:
+        severity, detail = "high", "The claim form and the policy document carry different policy numbers."
+    finding = _finding("policy_number_mismatch", severity,
+                       f"Claim names policy {claim.value}, but the uploaded policy is {policy.value}", detail, claim, 1)
     cite_policy = Citation(doc="policy", page=policy.page, quote=policy.quote, bbox=policy.bbox)
     return [finding.model_copy(update={"citations": [*finding.citations, cite_policy]})]
 

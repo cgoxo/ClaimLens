@@ -97,3 +97,15 @@ def test_policy_number_mismatch(ctx):
 
 def test_policy_number_missing_skips(ctx):
     assert _with_policy_number(ctx, None) == []
+
+
+def test_policy_number_ocr_confusions_ignored(ctx):
+    # O/0 and I/l/1 read differently by OCR are the same number
+    assert _with_policy_number(ctx, "EH-2O25-7788I2") == []
+
+
+def test_policy_number_containing_the_other_is_medium(ctx):
+    # renewal / endorsement suffix, or a member number inside a group policy
+    [f] = _with_policy_number(ctx, "EH-2025-778812/2026/01")
+    assert f.severity == "medium"
+    assert "renewal" in f.detail

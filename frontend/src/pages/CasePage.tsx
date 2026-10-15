@@ -30,7 +30,7 @@ export default function CasePage() {
   const { refresh } = useCaseWatcher();
   const finished = data?.status === "READY" || data?.status === "FAILED";
   useEffect(() => {
-    if (finished) void refresh();
+    if (finished) void refresh(true);
   }, [finished, refresh]);
 
   // findings in display order (grouped by severity), so numbering and j/k match what is on screen

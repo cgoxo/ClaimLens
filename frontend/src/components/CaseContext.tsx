@@ -70,7 +70,7 @@ export default function CaseContext({ context, mismatch, onOpen }: Props) {
           {show("claim", claim, "hospital_name", "Hospital")}
           {show("claim", claim, "diagnosis", "Diagnosis")}
           <Row label="Stay">
-            {admitted && discharged ? <span>{admitted} → {discharged}{days !== null && ` (${days} days)`}</span> : null}
+            {admitted && discharged ? <span>{admitted} → {discharged}{days !== null && ` (${days} ${days === 1 ? "day" : "days"})`}</span> : null}
           </Row>
           <Row label="Procedure">
             {procedures.length ? procedures.map((p, i) => (

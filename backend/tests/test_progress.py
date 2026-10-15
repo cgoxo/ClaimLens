@@ -99,10 +99,20 @@ def test_progress_write_failure_does_not_fail_the_case(tmp_path):
     original = deps.db.update_case
 
     def flaky(case_id, **fields):
-        if "progress" in fields and fields["progress"] is not None:
+        if set(fields) == {"progress"}:  # a progress-only (cosmetic) write
             raise RuntimeError("deadline exceeded")
         return original(case_id, **fields)
 
     deps.db.update_case = flaky
     run_pipeline(_new_case(deps), deps)
     assert deps.db.get_case("c1").status == "READY"
+
+
+def test_status_and_progress_share_writes(tmp_path):
+    deps = _deps(tmp_path)
+    case_id = _new_case(deps)
+    calls, original = [], deps.db.update_case
+    deps.db.update_case = lambda c, **k: calls.append(set(k)) or original(c, **k)
+    run_pipeline(case_id, deps)
+    assert len(calls) <= 10
+    assert {"status"} not in calls  # every status change carries its progress

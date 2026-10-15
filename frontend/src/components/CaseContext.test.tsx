@@ -44,3 +44,9 @@ test("policy numbers are marked when they disagree", () => {
   setup(context, true);
   for (const value of screen.getAllByText("EH-2025-778812")) expect(value.closest("div")).toHaveClass("is-warning");
 });
+
+test("a one-day stay reads as 1 day", () => {
+  const claim = context.claim as Record<string, { value: string }>;
+  setup({ ...context, claim: { ...context.claim, discharge_date: { ...claim.discharge_date, value: "11-Mar-2026" } } });
+  expect(screen.getByText(/\(1 day\)/)).toBeInTheDocument();
+});

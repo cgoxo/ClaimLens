@@ -82,3 +82,28 @@ def test_unhandled_error_logged_as_500_with_user(settings, caplog):
     [r] = _requests(caplog)
     assert (r.status, r.user, r.levelname) == (500, "a@x.com", "ERROR")
     assert r.exc_info and str(r.exc_info[1]) == "db down"
+
+
+def test_json_log_keeps_exception_type_but_not_its_message():
+    import sys
+
+    extracted = "patient Rahul Verma, diagnosis cataract"
+    try:
+        raise ValueError(extracted)
+    except ValueError:
+        record = logging.LogRecord("claimlens.pipeline", logging.ERROR, __file__, 1, "case c1 failed", None,
+                                   sys.exc_info())
+    out = json.loads(logs.JsonFormatter().format(record))
+    assert "ValueError" in out["exception"]
+    assert "Rahul" not in json.dumps(out)
+
+
+def test_prod_setup_routes_uvicorn_through_json(monkeypatch):
+    root = logging.getLogger()
+    monkeypatch.setattr(root, "handlers", list(root.handlers))
+    logs.setup("prod")
+    assert logging.getLogger("uvicorn.access").disabled  # the request middleware logs /api calls as JSON
+    error = logging.getLogger("uvicorn.error")
+    assert error.handlers == [] and error.propagate
+    assert isinstance(root.handlers[0].formatter, logs.JsonFormatter)
+    logging.getLogger("uvicorn.access").disabled = False
