@@ -86,7 +86,7 @@ def get_case(case_id: str, request: Request, user: str = Depends(current_user)):
     db = _deps(request).db
     if case.status in RUNNING and now() - case.updated_at > STALE_AFTER:
         # the background run died (e.g. the server restarted mid-run)
-        case = db.update_case(case_id, status="FAILED", step=case.status,
+        case = db.update_case(case_id, status="FAILED", step=case.status, finished_at=now(),
                               error="Analysis was interrupted (server restarted). Please upload the claim again.")
     return {
         **case.model_dump(mode="json"),

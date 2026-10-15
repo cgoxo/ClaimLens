@@ -93,6 +93,8 @@ class Case(BaseModel):
     summary: str | None = None
     dropped_findings: list[dict] = []
     context: dict | None = None  # grounded claim/policy facts, saved right after Extract
+    progress: dict | None = None  # {step, done, total, label} while running
+    finished_at: datetime | None = None
 
 
 # --- facts the AI pulls out (each value carries its proof) ------------------

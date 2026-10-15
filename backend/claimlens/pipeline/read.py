@@ -1,6 +1,7 @@
 """Step 2 (Read): turn each document into pages, spans, drawings, file info and page images."""
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import pymupdf
@@ -79,7 +80,8 @@ def _covers_page(page: pymupdf.Page) -> bool:
 
 
 def read_document(doc: str, data: bytes, filename: str, case_id: str,
-                  storage: Storage, ocr: Ocr) -> ReadResult:
+                  storage: Storage, ocr: Ocr,
+                  on_page: Callable[[str, int, str], None] | None = None) -> ReadResult:
     pdf = open_document(data, filename)
     is_photo = filename.rsplit(".", 1)[-1].lower() in IMAGE_TYPES
     meta = pdf.metadata or {}
@@ -126,6 +128,8 @@ def read_document(doc: str, data: bytes, filename: str, case_id: str,
             if d.get("fill") is not None and d.get("rect") is not None:
                 result.drawings.append(Drawing(doc=doc, page=index, rect=tuple(d["rect"]),
                                                fill=tuple(d["fill"]), seqno=d.get("seqno", 0)))
+        if on_page:
+            on_page(doc, index, kind)
     return result
 
 
