@@ -1,32 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Finding, Status } from "../api/types";
+import type { Finding } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import AppHeader from "../components/AppHeader";
 import FindingList from "../components/FindingList";
 import PageViewer from "../components/PageViewer";
+import Progress from "../components/Progress";
 import RiskStamp from "../components/RiskStamp";
 import { useCasePolling } from "../hooks/useCasePolling";
 import { SEVERITY_ORDER } from "../lib/findings";
 
-const STEPS: [Status, string][] = [["READING", "Reading"], ["CHECKING", "Checking"], ["PROVING", "Proving"], ["READY", "Ready"]];
 const money = (n: number | null) => (n === null ? "–" : `₹${n.toLocaleString("en-IN")}`);
-
-function Progress({ status }: { status: Status }) {
-  const current = status === "QUEUED" ? 0 : STEPS.findIndex(([s]) => s === status);
-  return (
-    <div className="progress-card">
-      <h1>Investigating…</h1>
-      <ol className="progress">
-        {STEPS.map(([s, label], i) => (
-          <li key={s} className={i < current ? "done" : i === current ? "current" : ""}
-            aria-current={i === current ? "step" : undefined}>{label}</li>
-        ))}
-      </ol>
-      <p className="muted">Reading every page, checking the story, proving each finding. Usually under a minute.</p>
-    </div>
-  );
-}
 
 export default function CasePage() {
   const { id = "" } = useParams();
@@ -89,7 +73,7 @@ export default function CasePage() {
       </div>
     );
   } else if (data.status !== "READY") {
-    body = <Progress status={data.status} />;
+    body = <Progress status={data.status} progress={data.progress} />;
   } else {
     const selected = findings.find((f) => f.id === selectedId) ?? null;
     body = (

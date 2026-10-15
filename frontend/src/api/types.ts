@@ -41,6 +41,27 @@ export interface PageMeta {
   height: number;
 }
 
+export interface Fact {
+  value: string | number | null;
+  page: number;
+  quote: string;
+  bbox: BBox | null;
+}
+
+export interface CaseProgress {
+  step: Status;
+  done: number;
+  total: number;
+  label: string;
+}
+
+/** Grounded claim and policy facts (backend ClaimFacts / PolicyFacts as JSON, nulls left out). */
+export interface CaseContextData {
+  claim: Record<string, unknown> | null;
+  policy: Record<string, unknown> | null;
+  policy_age_months: number | null;
+}
+
 export interface Case {
   id: string;
   owner_email: string;
@@ -55,6 +76,11 @@ export interface Case {
   payable: number | null;
   summary: string | null;
   dropped_findings: { title: string; reason: string }[];
+  context: CaseContextData | null;
+  progress: CaseProgress | null;
+  finished_at: string | null;
+  seen_at: string | null;
+  findings_count: number | null;
   findings: Finding[];
   pages: PageMeta[];
 }
@@ -65,4 +91,7 @@ export interface CaseSummary {
   risk: Risk | null;
   score: number | null;
   created_at: string;
+  progress: CaseProgress | null;
+  findings_count: number | null;
+  unseen: boolean;
 }

@@ -10,8 +10,8 @@ const user = () => userEvent.setup({ applyAccept: false });
 function setup(overrides = {}) {
   const client = {
     listCases: vi.fn(async () => [
-      { id: "old1", status: "READY" as const, risk: "low" as const, score: 5, created_at: "2026-10-09T10:00:00Z" },
-      { id: "new1", status: "READY" as const, risk: "high" as const, score: 100, created_at: "2026-10-10T10:00:00Z" },
+      { id: "old1", status: "READY" as const, risk: "low" as const, score: 5, created_at: "2026-10-09T10:00:00Z", progress: null, findings_count: 1, unseen: false },
+      { id: "new1", status: "READY" as const, risk: "high" as const, score: 100, created_at: "2026-10-10T10:00:00Z", progress: null, findings_count: 9, unseen: false },
     ]),
     createCase: vi.fn(async () => ({ case_id: "c1", status: "QUEUED" as const })),
     ...overrides,
