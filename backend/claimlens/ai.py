@@ -4,10 +4,11 @@ from typing import Protocol
 
 from pydantic import TypeAdapter
 
-from claimlens.models import ClaimFacts, CoverageItem, Finding, PolicyFacts
+from claimlens.models import ClaimFacts, CoverageItem, DocLabel, Finding, PolicyFacts
 
 
 class Ai(Protocol):
+    def classify_documents(self, files_text: str) -> list[DocLabel]: ...
     def extract_facts(self, claim_text: str) -> ClaimFacts: ...
     def extract_policy(self, policy_text: str) -> PolicyFacts: ...
     def judge_coverage(self, policy_text: str, facts: ClaimFacts) -> list[CoverageItem]: ...
@@ -22,6 +23,12 @@ class FakeAi:
 
     def _load(self, name: str):
         return json.loads((self.folder / f"{name}.json").read_text())
+
+    def classify_documents(self, files_text: str) -> list[DocLabel]:
+        """No labels unless a fixture says otherwise: nothing is rejected."""
+        if not (self.folder / "documents.json").is_file():
+            return []
+        return TypeAdapter(list[DocLabel]).validate_python(self._load("documents"))
 
     def extract_facts(self, claim_text: str) -> ClaimFacts:
         return ClaimFacts.model_validate(self._load("facts"))
@@ -57,6 +64,15 @@ Fill the JSON schema. For every value give `page` and `quote`, an exact short co
 - `waiting_periods`: one entry per condition listed under a waiting period, with `months`, the clause number
   and a quote of the sentence that states the waiting rule.
 - If something is not in the policy, use null. Never invent values."""
+
+DOCUMENTS_PROMPT = """You check what each uploaded file of a health insurance claim is. The files are marked
+"=== file N: <name> (<form>) ===". For each file say what it is:
+claim_form, bill (hospital, pharmacy or lab bill / invoice / receipt), discharge_summary, medical_report
+(lab or scan report, doctor's notes), prescription, policy (the insurance policy, schedule or wording),
+other_insurance (another insurance document, e.g. a pre-authorisation or ID card), or not_insurance
+(anything else: a CV, a bank statement, a photo, an unrelated letter).
+`what`: a few plain words, e.g. "a CV". `quote`: a short exact copy of text from that file that shows what it is.
+Judge only from the text. Give one entry per file."""
 
 COVERAGE_PROMPT = """You check an insurance claim against its policy. You get the policy text (pages marked
 "=== policy page N ===") and the claim facts as JSON. List the claimed treatments and charges as items.
@@ -102,6 +118,9 @@ class VertexGemini:
             config.response_json_schema = _schema(schema)
         response = self.client.models.generate_content(model=self.model, contents=text, config=config)
         return response.text or ""
+
+    def classify_documents(self, files_text: str) -> list[DocLabel]:
+        return TypeAdapter(list[DocLabel]).validate_json(self._ask(DOCUMENTS_PROMPT, files_text, list[DocLabel]))
 
     def extract_facts(self, claim_text: str) -> ClaimFacts:
         return ClaimFacts.model_validate_json(self._ask(FACTS_PROMPT, claim_text, ClaimFacts))

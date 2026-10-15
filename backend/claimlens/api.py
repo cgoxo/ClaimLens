@@ -13,7 +13,7 @@ from claimlens.models import Card, CardRole, Case, CaseFile, Review, now
 from claimlens.pipeline.read import open_document
 
 RUNNING = {"QUEUED", "READING", "CHECKING", "PROVING"}
-FINISHED = {"READY", "FAILED"}
+FINISHED = {"READY", "FAILED", "REJECTED"}
 STALE_AFTER = timedelta(minutes=15)
 
 router = APIRouter(prefix="/api")

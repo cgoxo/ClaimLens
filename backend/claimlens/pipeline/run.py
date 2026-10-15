@@ -10,6 +10,7 @@ from claimlens.pipeline.checks.cards import duplicate_pages
 from claimlens.pipeline.checks.coverage import policy_start, treated_date
 from claimlens.pipeline.checks.duplicate import register_invoices
 from claimlens.pipeline.context import Ctx
+from claimlens.pipeline.documents import check_documents
 from claimlens.pipeline.extract import extract
 from claimlens.pipeline.prove import prove
 from claimlens.models import now
@@ -102,9 +103,15 @@ def run_pipeline(case_id: str, deps) -> None:
         ctx = Ctx(case_id=case_id, read=read, deps=deps, cards=cards if tagged else [])
         ctx.skip_pages = {("claim", later.page) for _, later in duplicate_pages(read)}  # never count a page twice
 
-        status("CHECKING", "Extracting facts with Gemini")
+        status("CHECKING", "Checking these are insurance documents")
+        rejected, notes = check_documents(ctx)
+        if rejected:  # not a claim we can judge: stop before any analysis (and before paying for it)
+            db.update_case(case_id, status="REJECTED", step=None, progress=None, finished_at=now(), rejected=rejected)
+            clog.info("case %s rejected: %s", case_id, "; ".join(f"{r['name']}: {r['reason']}" for r in rejected))
+            return
+        progress.tick("Extracting facts with Gemini", 0, force=True)
         extract(ctx)
-        findings = []
+        findings = list(notes)
         for n, check in enumerate(ALL_CHECKS):
             name = check.__name__.removeprefix("check_")
             label = "Checking coverage with Gemini" if name == "coverage" else f"Checking: {name}"

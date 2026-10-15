@@ -4,7 +4,9 @@ from typing import Literal
 from pydantic import BaseModel, Field as PydField, field_validator
 
 Severity = Literal["critical", "high", "medium", "low", "coverage"]
-Status = Literal["DRAFT", "QUEUED", "READING", "CHECKING", "PROVING", "READY", "FAILED"]
+Status = Literal["DRAFT", "QUEUED", "READING", "CHECKING", "PROVING", "READY", "FAILED", "REJECTED"]
+DocKind = Literal["claim_form", "bill", "discharge_summary", "medical_report", "prescription", "policy",
+                  "other_insurance", "not_insurance"]
 CardRole = Literal["claim", "policy"]
 PageKind = Literal["digital", "scanned", "scanned_with_text", "image", "unreadable"]
 SEVERITY_ORDER: list[str] = ["critical", "high", "medium", "low", "coverage"]
@@ -129,6 +131,7 @@ class Case(BaseModel):
     finished_at: datetime | None = None
     seen_at: datetime | None = None  # when the owner last opened it after it finished
     findings_count: int | None = None
+    rejected: list[dict] = []  # REJECTED: [{name, form, reason, page, quote}] for each file that stopped the case
 
 
 # --- facts the AI pulls out (each value carries its proof) ------------------
@@ -195,6 +198,15 @@ class PolicyFacts(BaseModel):
     sum_insured: Fact | None = None
     room_rent_limit_per_day: Fact | None = None
     waiting_periods: list[WaitingPeriod] = []
+
+
+class DocLabel(BaseModel):
+    """What the AI says one uploaded file is, with a quote from it as proof."""
+
+    file: int  # 1-based, in the order the files were listed
+    kind: DocKind
+    what: str = ""  # a few words: "a CV", "a bank statement"
+    quote: str = ""
 
 
 class CoverageItem(BaseModel):
