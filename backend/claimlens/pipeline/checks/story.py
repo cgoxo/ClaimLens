@@ -1,5 +1,7 @@
 """Story check: do the facts across the documents agree with each other? Code only."""
 
+import re
+
 from rapidfuzz import fuzz
 
 from claimlens.models import Citation, Fact, Finding
@@ -94,8 +96,22 @@ def _claimed_amount_mismatch(ctx: Ctx) -> list[Finding]:
     return []
 
 
+def _policy_number_mismatch(ctx: Ctx) -> list[Finding]:
+    claim, policy = ctx.claim_facts.policy_number, ctx.policy_facts.policy_number if ctx.policy_facts else None
+    if not (claim and policy and claim.value and policy.value):
+        return []
+    key = lambda v: re.sub(r"[^A-Z0-9]", "", str(v).upper())
+    if key(claim.value) == key(policy.value):
+        return []
+    finding = _finding("policy_number_mismatch", "high",
+                       f"Claim names policy {claim.value}, but the uploaded policy is {policy.value}",
+                       "The claim form and the policy document carry different policy numbers.", claim, 1)
+    cite_policy = Citation(doc="policy", page=policy.page, quote=policy.quote, bbox=policy.bbox)
+    return [finding.model_copy(update={"citations": [*finding.citations, cite_policy]})]
+
+
 def check_story(ctx: Ctx) -> list[Finding]:
     if ctx.claim_facts is None:
         return []
     return (_sum_mismatch(ctx) + _date_order(ctx) + _inpatient_outside_stay(ctx)
-            + _name_mismatch(ctx) + _claimed_amount_mismatch(ctx))
+            + _name_mismatch(ctx) + _claimed_amount_mismatch(ctx) + _policy_number_mismatch(ctx))

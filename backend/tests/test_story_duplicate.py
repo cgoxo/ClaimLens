@@ -69,3 +69,31 @@ def test_date_order_detects_discharge_before_admission(ctx):
     ctx.claim_facts.discharge_date = ctx.claim_facts.discharge_date.model_copy(update={"value": "05-Mar-2026"})
     found = _codes(check_story(ctx), "date_order")
     assert found and found[0].citations[0].quote == "Date of discharge: 13-Mar-2026"
+
+
+def _with_policy_number(ctx, value):
+    from claimlens.pipeline.checks.story import check_story
+
+    pn = ctx.policy_facts.policy_number
+    ctx.policy_facts = ctx.policy_facts.model_copy(
+        update={"policy_number": None if value is None else pn.model_copy(update={"value": value})})
+    return [f for f in check_story(ctx) if f.code == "policy_number_mismatch"]
+
+
+def test_policy_number_match_no_finding(ctx):
+    assert _with_policy_number(ctx, "EH-2025-778812") == []
+
+
+def test_policy_number_formatting_ignored(ctx):
+    assert _with_policy_number(ctx, "EH 2025/778812") == []
+
+
+def test_policy_number_mismatch(ctx):
+    [f] = _with_policy_number(ctx, "EH-2024-000001")
+    assert f.severity == "high"
+    assert f.title == "Claim names policy EH-2025-778812, but the uploaded policy is EH-2024-000001"
+    assert [c.doc for c in f.citations] == ["claim", "policy"]
+
+
+def test_policy_number_missing_skips(ctx):
+    assert _with_policy_number(ctx, None) == []
