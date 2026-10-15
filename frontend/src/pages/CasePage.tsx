@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Finding } from "../api/types";
+import type { Citation, Finding } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import AppHeader from "../components/AppHeader";
+import CaseContext from "../components/CaseContext";
 import FindingList from "../components/FindingList";
 import PageViewer from "../components/PageViewer";
 import Progress from "../components/Progress";
 import RiskStamp from "../components/RiskStamp";
 import { useCasePolling } from "../hooks/useCasePolling";
 import { SEVERITY_ORDER } from "../lib/findings";
+import { money } from "../lib/format";
 
-const money = (n: number | null) => (n === null ? "–" : `₹${n.toLocaleString("en-IN")}`);
 
 export default function CasePage() {
   const { id = "" } = useParams();
@@ -18,6 +19,9 @@ export default function CasePage() {
   const { data, error, connectionLost } = useCasePolling(id, client);
   const [chosenId, setSelectedId] = useState<string | null>(null);
   const [selectionKey, setSelectionKey] = useState(0);
+  // a context value opened in the viewer; picking a finding clears it
+  const [pinned, setPinned] = useState<Citation | null>(null);
+  const openFact = (c: Citation) => { setPinned(c); setSelectionKey((k) => k + 1); };
 
   useEffect(() => () => client.releaseImages(), [client]);
 
@@ -50,6 +54,13 @@ export default function CasePage() {
 
   const review = (f: Finding, action: "accept" | "dismiss", note: string) => client.review(id, f.id, action, note);
 
+  const viewer = (selected: Finding | null) => data && (
+    <PageViewer caseId={data.id} pages={data.pages} client={client}
+      selected={pinned ?? selected?.citations[0] ?? null} selectionKey={selectionKey}
+      selectedNumber={!pinned && selected ? findings.indexOf(selected) + 1 : null}
+      selectedDetail={pinned ? pinned.quote : selected?.detail ?? ""} />
+  );
+
   let body;
   if (error?.status === 404) {
     body = (
@@ -72,11 +83,14 @@ export default function CasePage() {
         <Link to="/" className="btn btn-quiet">Back to upload</Link>
       </div>
     );
-  } else if (data.status !== "READY") {
+  } else if (data.status !== "READY" && data.pages.length === 0) {
     body = <Progress status={data.status} progress={data.progress} />;
   } else {
-    const selected = findings.find((f) => f.id === selectedId) ?? null;
-    body = (
+    const ready = data.status === "READY";
+    const selected = ready ? findings.find((f) => f.id === selectedId) ?? null : null;
+    const mismatch = findings.some((f) => f.code === "policy_number_mismatch");
+    const context = data.context && <CaseContext context={data.context} mismatch={mismatch} onOpen={openFact} />;
+    body = ready ? (
       <div className="dossier">
         <section className="dossier-left" aria-label="Findings">
           <header className="case-head">
@@ -91,8 +105,9 @@ export default function CasePage() {
             {data.risk && <RiskStamp risk={data.risk} score={data.score} />}
           </header>
           {data.summary && <p className="summary">{data.summary}</p>}
+          {context}
           <p className="hint muted">Select a finding to see it on the page. <kbd>j</kbd> / <kbd>k</kbd> to move.</p>
-          <FindingList findings={findings} selectedId={selectedId} onSelect={(f) => { setSelectedId(f.id); setSelectionKey((k) => k + 1); }} onReview={review} />
+          <FindingList findings={findings} selectedId={selectedId} onSelect={(f) => { setPinned(null); setSelectedId(f.id); setSelectionKey((k) => k + 1); }} onReview={review} />
           {data.dropped_findings.length > 0 && (
             <details className="dropped">
               <summary>Not proven ({data.dropped_findings.length})</summary>
@@ -101,11 +116,16 @@ export default function CasePage() {
           )}
         </section>
         <section className="dossier-right" aria-label="Document viewer">
-          <PageViewer caseId={data.id} pages={data.pages} client={client}
-            selected={selected?.citations[0] ?? null} selectionKey={selectionKey}
-            selectedNumber={selected ? findings.indexOf(selected) + 1 : null}
-            selectedDetail={selected?.detail ?? ""} />
+          {viewer(selected)}
         </section>
+      </div>
+    ) : (
+      <div className="dossier">
+        <section className="dossier-left" aria-label="Progress">
+          <Progress status={data.status} progress={data.progress} />
+          {context}
+        </section>
+        <section className="dossier-right" aria-label="Document viewer">{viewer(null)}</section>
       </div>
     );
   }

@@ -237,3 +237,22 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
   .cover-sheet { padding: var(--space-6) var(--space-4); }
   .cover-row { flex-direction: column; }
 }
+
+/* ---------- case: context panel ---------- */
+.case-context { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: var(--space-4) 0; }
+.dossier-left .progress-card + .case-context { margin-top: var(--space-5); }
+.ctx-card { background: var(--sheet); border: 1px solid var(--rule); box-shadow: var(--shadow-paper); padding: var(--space-4); min-width: 0; }
+.ctx-card h2 { font-family: var(--font-display); font-size: 18px; margin: 0 0 var(--space-3); }
+.ctx-card dl { margin: 0; display: grid; gap: var(--space-2); }
+.ctx-row { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); gap: var(--space-2); font-size: 14px; }
+.ctx-row dt { color: var(--ink-soft); }
+.ctx-row dd { margin: 0; overflow-wrap: anywhere; }
+.ctx-row.is-warning dd { color: var(--amber); font-weight: 600; }
+.ctx-line { display: block; }
+.ctx-kind { text-transform: capitalize; }
+.page-link { background: none; border: 0; padding: 0 2px; color: var(--focus); cursor: pointer; font-size: 12px; }
+.page-link:hover { text-decoration: underline; }
+.page-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+@media (max-width: 720px) {
+  .case-context { grid-template-columns: minmax(0, 1fr); }
+}

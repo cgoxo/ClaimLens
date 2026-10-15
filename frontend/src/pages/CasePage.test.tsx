@@ -150,3 +150,17 @@ test("leaving the case page releases its page images", async () => {
   unmount();
   expect(releaseImages).toHaveBeenCalled();
 });
+
+test("while checking, shows progress, the context panel and the viewer", async () => {
+  setup({}, { ...sampleCase, status: "CHECKING", findings: [], risk: null, score: null,
+    progress: { step: "CHECKING", done: 1, total: 4, label: "Checking: story" } });
+  expect(await screen.findByText("Checking: story")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "The claim" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Claim" })).toBeInTheDocument();
+});
+
+test("a context link opens its page in the viewer", async () => {
+  setup();
+  await userEvent.click(await screen.findByRole("button", { name: "Diagnosis, claim page 2" }));
+  expect(screen.getByRole("button", { name: "claim page 2" })).toHaveAttribute("aria-current", "true");
+});
