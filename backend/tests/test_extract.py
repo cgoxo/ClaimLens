@@ -100,8 +100,8 @@ def test_column_major_form_quote_grounds_against_what_the_ai_read(tmp_path):
     data = pdf.tobytes()
     storage = LocalStorage(tmp_path)
     storage.put("cases/c1/claim.pdf", data, "application/pdf")
-    read = read_document("claim", data, "claim.pdf", "c1", storage, NoOcr())
-    ctx = Ctx(case_id="c1", read=read, deps=type("D", (), {"storage": storage})(), files={"claim": "cases/c1/claim.pdf"})
+    read = read_document("claim", data, "claim.pdf", "c1", storage, NoOcr(), key="cases/c1/claim.pdf")
+    ctx = Ctx(case_id="c1", read=read, deps=type("D", (), {"storage": storage})())
 
     assert "Patient Name:   Ravi Kumar" in labelled_text(read, "claim")
     found, bbox = locate(ctx, "claim", 1, "Patient Name: Ravi Kumar")

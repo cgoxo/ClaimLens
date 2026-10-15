@@ -75,7 +75,7 @@ def check_coverage(ctx: Ctx) -> list[Finding]:
 
     # Gemini often lists one item per bill line for the same rule: group them by clause.
     groups: dict[tuple, list] = {}
-    items = ctx.deps.ai.judge_coverage(labelled_text(ctx.read, "policy"), ctx.claim_facts)
+    items = ctx.deps.ai.judge_coverage(labelled_text(ctx.read, "policy", ctx.cards), ctx.claim_facts)
     for item in items:
         if item.verdict not in ("not_covered", "partly_covered") or item.page is None:
             continue

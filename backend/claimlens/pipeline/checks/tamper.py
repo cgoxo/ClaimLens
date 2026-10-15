@@ -33,13 +33,13 @@ def _cite(span: Span) -> Citation:
     return Citation(doc=span.doc, page=span.page, quote=span.text, bbox=span.bbox)
 
 
-def _first_line(ctx: Ctx, doc: str) -> Citation:
-    """File-level findings point at page 1 for display; their proof is the file metadata."""
-    spans = sorted(ctx.spans_on(doc, 1), key=lambda s: s.seqno)
+def _first_line(ctx: Ctx, doc: str, page: int = 1) -> Citation:
+    """File-level findings point at the file's first page for display; their proof is the file metadata."""
+    spans = sorted(ctx.spans_on(doc, page), key=lambda s: s.seqno)
     if spans:
         return _cite(spans[0]).model_copy(update={"source": "metadata"})
-    line = next((l.strip() for l in ctx.page_text(doc, 1).splitlines() if l.strip()), "")
-    return Citation(doc=doc, page=1, quote=line, source="metadata")
+    line = next((l.strip() for l in ctx.page_text(doc, page).splitlines() if l.strip()), "")
+    return Citation(doc=doc, page=page, quote=line, source="metadata")
 
 
 def _font_outliers(ctx: Ctx, ids: _Ids) -> list[Finding]:
@@ -92,24 +92,24 @@ def _ocr_layer_mismatch(ctx: Ctx, ids: _Ids) -> list[Finding]:
 def _file_info(ctx: Ctx, ids: _Ids) -> list[Finding]:
     out = []
     for info in ctx.read.files:
-        cite = _first_line(ctx, info.doc)
+        cite, page = _first_line(ctx, info.doc, info.first_page), info.first_page
         created, modified = _pdf_date(info.created), _pdf_date(info.modified)
         dates = f"created {created:%d-%b-%Y}, modified {modified:%d-%b-%Y}" if created and modified else ""
         tool = next((t for t in EDITING_TOOLS if t in f"{info.producer} {info.creator}".lower()), None)
         if tool:
             name = info.producer if tool in info.producer.lower() else info.creator
             out.append(Finding(
-                id=ids("editing_tool", info.doc, 1), check="tamper", code="editing_tool", severity="high",
+                id=ids("editing_tool", info.doc, page), check="tamper", code="editing_tool", severity="high",
                 title=f"File was saved with an editing tool ({name})",
                 detail=f"The {info.doc} file says it was produced by {name}. {dates}".strip(),
                 citations=[cite]))
         elif created and modified and (modified - created).days >= 1:
             out.append(Finding(
-                id=ids("late_edit", info.doc, 1), check="tamper", code="late_edit", severity="medium",
+                id=ids("late_edit", info.doc, page), check="tamper", code="late_edit", severity="medium",
                 title="File was changed after it was created", detail=dates, citations=[cite]))
         if info.eof_count > 1:
             out.append(Finding(
-                id=ids("multiple_saves", info.doc, 1), check="tamper", code="multiple_saves", severity="medium",
+                id=ids("multiple_saves", info.doc, page), check="tamper", code="multiple_saves", severity="medium",
                 title=f"File was saved {info.eof_count} times",
                 detail="Each extra save can mean an edit after the original was made.", citations=[cite]))
     return out

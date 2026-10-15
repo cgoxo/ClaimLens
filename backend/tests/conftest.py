@@ -36,8 +36,8 @@ def make_ctx(tmp_path, ai=None, claim="claim.pdf", policy="policy.pdf"):
         key = f"cases/c1/{doc}.pdf"
         storage.put(key, data, "application/pdf")
         files[doc] = key
-        read.extend(read_document(doc, data, name, "c1", storage, NoOcr()))
-    return Ctx(case_id="c1", read=read, deps=deps, files=files)
+        read.extend(read_document(doc, data, name, "c1", storage, NoOcr(), key=key))
+    return Ctx(case_id="c1", read=read, deps=deps)
 
 
 @pytest.fixture

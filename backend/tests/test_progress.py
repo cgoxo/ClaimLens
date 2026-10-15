@@ -54,7 +54,7 @@ def test_progress_labels_and_cleared(tmp_path):
     deps = _deps(tmp_path)
     labels = _recorded(deps)
     run_pipeline(_new_case(deps), deps)
-    for label in ["Reading claim page 1 (1 of 7)", "Reading policy page 3 (7 of 7)", "Extracting facts with Gemini",
+    for label in ["Reading Claim form, page 1 (1 of 7)", "Reading Policy, page 3 (7 of 7)", "Extracting facts with Gemini",
                   "Checking: tamper", "Checking coverage with Gemini", "Proving findings"]:
         assert label in labels
     case = deps.db.get_case("c1")
@@ -114,5 +114,5 @@ def test_status_and_progress_share_writes(tmp_path):
     calls, original = [], deps.db.update_case
     deps.db.update_case = lambda c, **k: calls.append(set(k)) or original(c, **k)
     run_pipeline(case_id, deps)
-    assert len(calls) <= 10
+    assert len(calls) <= 10 + 1  # + one progress write per file after the first (2 files here)
     assert {"status"} not in calls  # every status change carries its progress

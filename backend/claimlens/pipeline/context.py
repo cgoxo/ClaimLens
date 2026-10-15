@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from claimlens.models import ClaimFacts, PolicyFacts, Span
+from claimlens.models import Card, ClaimFacts, PolicyFacts, Span
 from claimlens.pipeline.read import ReadResult
 
 
@@ -14,7 +14,8 @@ class Ctx:
     deps: Any
     claim_facts: ClaimFacts | None = None
     policy_facts: PolicyFacts | None = None
-    files: dict[str, str] = field(default_factory=dict)  # doc -> storage key
+    cards: list[Card] = field(default_factory=list)  # empty for cases from before cards
+    skip_pages: set[tuple[str, int]] = field(default_factory=set)  # (doc, page) kept from the AI: duplicates
 
     def page_text(self, doc: str, page: int) -> str:
         return next((p.text for p in self.read.pages if p.doc == doc and p.page == page), "")

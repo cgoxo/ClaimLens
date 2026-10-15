@@ -45,6 +45,7 @@ Fill the JSON schema. Rules:
 - `bills`: one entry per bill. `inpatient` is true when the bill is for an inpatient / ward / hospital-stay.
   Give every line item with its amount, and the bill total as printed.
 - `room`: the room rate per day and number of days, if the bill shows them.
+- A bill never spans two cards (see the page headers). Report each bill's first page as `page`.
 - `hospital_name`: the hospital's name as printed.
 - If something is not in the documents, use null. Never invent values."""
 

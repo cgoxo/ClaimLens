@@ -6,22 +6,40 @@ from rapidfuzz import fuzz
 
 from claimlens.models import Fact, WaitingPeriod
 from claimlens.pipeline.context import Ctx
-from claimlens.pipeline.read import ReadResult, reading_lines, visible_text
+from claimlens.cards import card_label
+from claimlens.models import Card
+from claimlens.pipeline.read import ReadResult, open_document, reading_lines, visible_text
 from claimlens.pipeline.text import normalise
 
 
-def labelled_text(read: ReadResult, doc: str) -> str:
-    """What the AI reads: each page as a person sees it (text hidden under white boxes left out)."""
-    return "\n\n".join(f"=== {doc} page {p.page} ===\n{visible_text(read, doc, p.page)}"
-                         for p in read.pages if p.doc == doc)
+def _header_label(cards: list[Card], card_id: str) -> str:
+    card = next((c for c in cards if c.id == card_id), None)
+    if card is not None and card.role == "bill":
+        return card_label(cards, card_id).replace(" · ", " (") + ")"  # "Bill 2 (pharmacy)"
+    return card_label(cards, card_id)
 
 
-def _pdf(ctx: Ctx, doc: str) -> pymupdf.Document | None:
+def labelled_text(read: ReadResult, doc: str, cards: list[Card] | None = None, skip=frozenset()) -> str:
+    """What the AI reads: each page as a person sees it (text hidden under white boxes left out),
+    headed with its card, minus pages in `skip` (duplicate images)."""
+    def header(p) -> str:
+        card = f" · {_header_label(cards, p.card_id)}" if cards and p.card_id else ""
+        return f"=== {doc} page {p.page}{card} ==="
+
+    return "\n\n".join(f"{header(p)}\n{visible_text(read, doc, p.page)}"
+                         for p in read.pages if p.doc == doc and (doc, p.page) not in skip)
+
+
+def _pdf(ctx: Ctx, doc: str, page: int) -> tuple[pymupdf.Document | None, int]:
+    """The uploaded file holding stream page `page`, opened, and the page's 0-based index in it."""
+    files = [f for f in ctx.read.files if f.doc == doc and f.key and f.first_page <= page]
+    if not files:
+        return None, 0
+    info = max(files, key=lambda f: f.first_page)
     cache = ctx.__dict__.setdefault("_pdfs", {})
-    if doc not in cache:
-        key = ctx.files.get(doc)
-        cache[doc] = pymupdf.open(stream=ctx.deps.storage.get(key), filetype="pdf") if key else None
-    return cache[doc]
+    if info.key not in cache:
+        cache[info.key] = open_document(ctx.deps.storage.get(info.key), info.key)  # photos become 1-page PDFs
+    return cache[info.key], page - info.first_page
 
 
 def locate(ctx: Ctx, doc: str, page: int, quote: str) -> tuple[bool, tuple | None]:
@@ -29,9 +47,9 @@ def locate(ctx: Ctx, doc: str, page: int, quote: str) -> tuple[bool, tuple | Non
     if not quote or not ctx.page_text(doc, page):
         return False, None
     if ctx.page_kind(doc, page) == "digital":
-        pdf = _pdf(ctx, doc)
-        if pdf is not None and 1 <= page <= pdf.page_count:
-            hits = pdf[page - 1].search_for(quote)
+        pdf, index = _pdf(ctx, doc, page)
+        if pdf is not None and 0 <= index < pdf.page_count:
+            hits = pdf[index].search_for(quote)
             if hits:
                 return True, tuple(hits[0])
     wanted = normalise(quote)
@@ -89,5 +107,7 @@ def _ground_model(ctx: Ctx, doc: str, model: BaseModel) -> BaseModel | None:
 
 def extract(ctx: Ctx) -> None:
     ai = ctx.deps.ai
-    ctx.claim_facts = _ground_model(ctx, "claim", ai.extract_facts(labelled_text(ctx.read, "claim")))
-    ctx.policy_facts = _ground_model(ctx, "policy", ai.extract_policy(labelled_text(ctx.read, "policy")))
+    ctx.claim_facts = _ground_model(ctx, "claim", ai.extract_facts(
+        labelled_text(ctx.read, "claim", ctx.cards, ctx.skip_pages)))
+    ctx.policy_facts = _ground_model(ctx, "policy", ai.extract_policy(
+        labelled_text(ctx.read, "policy", ctx.cards, ctx.skip_pages)))
