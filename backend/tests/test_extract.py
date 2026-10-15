@@ -55,3 +55,27 @@ def test_ai_sees_page_as_a_person_does(ctx):
     assert "Rs 48,500" in text
     assert "Rs 45,500" not in text  # hidden under the white box
     assert "Date: 15-Mar-2026" in text
+
+
+def test_fabricated_quote_sharing_a_label_word_dropped(ctx):
+    from claimlens.pipeline.extract import locate
+
+    # page 1 has the label "Hospital:"; a made-up hospital must not ground on it
+    assert locate(ctx, "claim", 1, "Apollo Hospital") == (False, None)
+    assert locate(ctx, "claim", 1, "Sunrise Eye & General Hospital, Pune")[0]
+
+
+def test_ocr_word_spans_give_a_box_for_a_multi_word_quote():
+    from claimlens.models import PageInfo, Span
+    from claimlens.pipeline.context import Ctx
+    from claimlens.pipeline.extract import locate
+    from claimlens.pipeline.read import ReadResult
+
+    words = [("Total", 10), ("Rs", 60), ("13,500", 80), ("Paid", 200)]
+    spans = [Span(doc="claim", page=1, text=t, font="ocr", size=0, bbox=(x, 50, x + 30, 60), seqno=i)
+             for i, (t, x) in enumerate(words)]
+    read = ReadResult(pages=[PageInfo(doc="claim", page=1, kind="image", text=" ".join(t for t, _ in words),
+                                      width=300, height=100, png_key="k")], spans=spans)
+    ctx = Ctx(case_id="c1", read=read, deps=None)
+    assert locate(ctx, "claim", 1, "Rs 13,500") == (True, (60, 50, 110, 60))
+    assert locate(ctx, "claim", 1, "Rs 99,999") == (False, None)

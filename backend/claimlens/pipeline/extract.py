@@ -36,11 +36,24 @@ def locate(ctx: Ctx, doc: str, page: int, quote: str) -> tuple[bool, tuple | Non
                 return True, tuple(hits[0])
     wanted = normalise(quote)
     best = max(ctx.spans_on(doc, page), key=lambda s: fuzz.partial_ratio(wanted, normalise(s.text)), default=None)
-    if best is not None and fuzz.partial_ratio(wanted, normalise(best.text)) >= 90 and len(normalise(best.text)) >= len(wanted) * 0.5:
+    if best is not None and fuzz.partial_ratio(wanted, normalise(best.text)) >= 90 and len(normalise(best.text)) >= len(wanted) * 0.9:
         return True, best.bbox
     if wanted in normalise(ctx.page_text(doc, page)):
-        return True, None
+        return True, _window_bbox(ctx.spans_on(doc, page), wanted)
     return False, None
+
+
+def _window_bbox(spans: list, wanted: str) -> tuple | None:
+    """Box around the shortest run of consecutive spans (e.g. OCR words) whose text contains the quote."""
+    spans = sorted(spans, key=lambda s: s.seqno)
+    longest = min(len(spans), len(wanted.split()) + 2)  # a quote of n words spans at most n (+ split) spans
+    for size in range(2, longest + 1):
+        for i in range(len(spans) - size + 1):
+            run = spans[i:i + size]
+            if wanted in normalise(" ".join(s.text for s in run)):
+                return (min(s.bbox[0] for s in run), min(s.bbox[1] for s in run),
+                        max(s.bbox[2] for s in run), max(s.bbox[3] for s in run))
+    return None
 
 
 def ground(ctx: Ctx, doc: str, fact: Fact | None) -> Fact | None:
