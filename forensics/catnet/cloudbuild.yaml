@@ -9,9 +9,10 @@ steps:
       - |
         set -euo pipefail
         pip install -q gdown==5.2.0
-        gdown --folder "https://drive.google.com/drive/folders/1hBEfnFtGG6q_srBHVEmbF3fTq0IhP8jq" -O /workspace/dl --remaining-ok
         mkdir -p weights
-        cp "$(find /workspace/dl -name CAT_full_v2.pth.tar | head -1)" weights/CAT_full_v2.pth.tar
+        # only the full v2 model is needed (file id from the author's weights folder; other files there are
+        # training-only, and some are not publicly downloadable)
+        gdown "1anexqI_JlkO41wx7MgkRLf34VnpIzPw" -O weights/CAT_full_v2.pth.tar
         sha="$(sha256sum weights/CAT_full_v2.pth.tar | cut -d' ' -f1)"
         echo "CAT_full_v2.pth.tar sha256 $sha"
         if [ -n "${_WEIGHTS_SHA256}" ] && [ "$sha" != "${_WEIGHTS_SHA256}" ]; then echo "weights checksum mismatch" >&2; exit 1; fi
