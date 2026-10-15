@@ -111,7 +111,9 @@ def test_verify_task_token_rejects_garbage(tmp_path):
     assert jobs.verify_task_token("", _cloud_settings(tmp_path)) is False
 
 
-def test_settings_cloudtasks_needs_sa_and_url(tmp_path):
+def test_settings_cloudtasks_needs_sa_and_url(tmp_path, monkeypatch):
+    for var in ("TASKS_SA", "SERVICE_URL", "JOBS"):  # CI sets these for the deploy step
+        monkeypatch.delenv(var, raising=False)
     with pytest.raises(ValueError):
         Settings(_env_file=None, data_dir=tmp_path, jobs="cloudtasks")
 
