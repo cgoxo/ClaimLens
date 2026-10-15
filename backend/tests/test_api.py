@@ -75,7 +75,7 @@ def test_list_cases_only_mine(client):
     _upload(client)
     _upload(client, headers={"X-Dev-User": "b@x.com"})
     mine = client.get("/api/cases", headers=A).json()
-    assert len(mine) == 1 and set(mine[0]) == {"id", "status", "risk", "score", "created_at"}
+    assert len(mine) == 1 and set(mine[0]) == {"id", "status", "risk", "score", "created_at", "progress", "findings_count", "unseen"}
 
 
 def test_bad_file_400(client):
@@ -116,3 +116,39 @@ def test_firebase_mode(settings, monkeypatch):
     assert c.get("/api/me", headers={"Authorization": "Bearer t"}).json() == {"email": "anyone@gmail.com"}
     monkeypatch.setattr(auth, "verify_firebase_token", lambda token, project: (_ for _ in ()).throw(ValueError("bad")))
     assert c.get("/api/me", headers={"Authorization": "Bearer t"}).status_code == 401
+
+
+def _row(client, case_id):
+    return next(r for r in client.get("/api/cases", headers=A).json() if r["id"] == case_id)
+
+
+def test_unseen_until_opened(client):
+    case_id = _upload(client).json()["case_id"]
+    assert _row(client, case_id)["unseen"] is True
+    client.get(f"/api/cases/{case_id}", headers=A)
+    assert _row(client, case_id)["unseen"] is False
+
+
+def test_second_get_does_not_write(client):
+    case_id = _upload(client).json()["case_id"]
+    client.get(f"/api/cases/{case_id}", headers=A)
+    db = client.app.state.deps.db
+    calls, original = [], db.update_case
+    db.update_case = lambda *a, **k: calls.append(k) or original(*a, **k)
+    client.get(f"/api/cases/{case_id}", headers=A)
+    assert calls == []
+
+
+def test_list_has_findings_count(client):
+    case_id = _upload(client).json()["case_id"]
+    assert _row(client, case_id)["findings_count"] == 9
+
+
+def test_running_case_not_unseen(client):
+    from claimlens.models import Case
+
+    db = client.app.state.deps.db
+    db.create_case(Case(id="r1", owner_email="a@x.com", status="CHECKING"))
+    assert _row(client, "r1")["unseen"] is False
+    client.get("/api/cases/r1", headers=A)
+    assert db.get_case("r1").seen_at is None

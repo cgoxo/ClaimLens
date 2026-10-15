@@ -101,7 +101,8 @@ def run_pipeline(case_id: str, deps) -> None:
 
         value = score(kept)
         report = dict(score=value, risk=risk_band(value), payable=payable(ctx, kept),
-                      summary=summarise(ctx, kept), dropped_findings=dropped)
+                      summary=summarise(ctx, kept), dropped_findings=dropped,
+                      findings_count=len(kept))
         register_invoices(ctx)
         db.update_case(case_id, status="READY", step=None, progress=None, finished_at=now(), **report)
     except Exception as e:

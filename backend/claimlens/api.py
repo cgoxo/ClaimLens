@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 RUNNING = {"QUEUED", "READING", "CHECKING", "PROVING"}
+FINISHED = {"READY", "FAILED"}
 STALE_AFTER = timedelta(minutes=15)
 from typing import Literal
 from uuid import uuid4
@@ -28,6 +29,12 @@ def _own_case(request: Request, case_id: str, user: str) -> Case:
     if case is None or case.owner_email != user:
         raise HTTPException(404, "Case not found")
     return case
+
+
+def _unseen(case: Case) -> bool:
+    """Finished since the owner last opened it."""
+    return (case.status in FINISHED and case.finished_at is not None
+            and (case.seen_at is None or case.seen_at < case.finished_at))
 
 
 async def _validated(doc: str, upload: UploadFile, settings) -> tuple[bytes, str]:
@@ -76,7 +83,8 @@ async def create_case(request: Request, claim: UploadFile, policy: UploadFile, u
 
 @router.get("/cases")
 def list_cases(request: Request, user: str = Depends(current_user)):
-    return [c.model_dump(mode="json", include={"id", "status", "risk", "score", "created_at"})
+    return [{**c.model_dump(mode="json", include={"id", "status", "risk", "score", "created_at", "progress",
+                                                  "findings_count"}), "unseen": _unseen(c)}
             for c in _deps(request).db.list_cases(user)]
 
 
@@ -88,6 +96,8 @@ def get_case(case_id: str, request: Request, user: str = Depends(current_user)):
         # the background run died (e.g. the server restarted mid-run)
         case = db.update_case(case_id, status="FAILED", step=case.status, finished_at=now(),
                               error="Analysis was interrupted (server restarted). Please upload the claim again.")
+    if _unseen(case):
+        case = db.update_case(case_id, seen_at=now())
     return {
         **case.model_dump(mode="json"),
         "findings": [f.model_dump(mode="json") for f in db.get_findings(case_id)],

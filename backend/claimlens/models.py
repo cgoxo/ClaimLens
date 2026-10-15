@@ -95,6 +95,8 @@ class Case(BaseModel):
     context: dict | None = None  # grounded claim/policy facts, saved right after Extract
     progress: dict | None = None  # {step, done, total, label} while running
     finished_at: datetime | None = None
+    seen_at: datetime | None = None  # when the owner last opened it after it finished
+    findings_count: int | None = None
 
 
 # --- facts the AI pulls out (each value carries its proof) ------------------
