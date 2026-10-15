@@ -1,20 +1,41 @@
 import logging
+import re
+import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from claimlens import runner
+from claimlens import logs, runner
 from claimlens.api import router
 from claimlens.deps import Deps, build_deps
 from claimlens.settings import Settings
 
+request_log = logging.getLogger("claimlens.request")
+CASE_PATH = re.compile(r"/api/cases/([^/]+)")
+
 
 def create_app(settings: Settings | None = None, deps: Deps | None = None) -> FastAPI:
     settings = settings or Settings()
-    logging.basicConfig(level=logging.INFO)
+    logs.setup(settings.app_env)
     app = FastAPI(title="ClaimLens")
     app.state.deps = deps or build_deps(settings)
     app.state.start = runner.start
+
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return await call_next(request)
+        start = time.perf_counter()
+        response = await call_next(request)
+        status = response.status_code
+        level = logging.ERROR if status >= 500 else logging.WARNING if status >= 400 else logging.INFO
+        case = CASE_PATH.match(path)
+        request_log.log(level, "%s %s %s", request.method, path, status, extra={
+            "user": getattr(request.state, "user", None), "method": request.method, "path": path,
+            "status": status, "latency_ms": round((time.perf_counter() - start) * 1000),
+            "case_id": case.group(1) if case else None})
+        return response
 
     # not /healthz: Cloud Run reserves paths ending in "z"
     @app.get("/health")

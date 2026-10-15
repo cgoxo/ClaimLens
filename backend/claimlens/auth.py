@@ -21,6 +21,7 @@ def current_user(request: Request) -> str:
         email = request.headers.get("X-Dev-User", "").strip().lower()
         if not email:
             raise HTTPException(401, "Missing X-Dev-User header")
+        request.state.user = email
         return email
 
     header = request.headers.get("Authorization", "")
@@ -34,4 +35,5 @@ def current_user(request: Request) -> str:
     email = (claims.get("email") or "").lower()
     if not email or not claims.get("email_verified"):
         raise HTTPException(403, "Sign in with a Google account (verified email)")
+    request.state.user = email
     return email

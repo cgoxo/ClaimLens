@@ -2,6 +2,7 @@
 
 import logging
 
+from claimlens.logs import case_logger
 from claimlens.pipeline.checks import ALL_CHECKS
 from claimlens.pipeline.checks.duplicate import register_invoices
 from claimlens.pipeline.context import Ctx
@@ -14,7 +15,7 @@ log = logging.getLogger(__name__)
 
 
 def run_pipeline(case_id: str, deps) -> None:
-    db, step = deps.db, "QUEUED"
+    db, step, clog = deps.db, "QUEUED", log
 
     def status(value: str) -> None:
         nonlocal step
@@ -23,6 +24,7 @@ def run_pipeline(case_id: str, deps) -> None:
 
     try:
         case = db.get_case(case_id)
+        clog = case_logger(case_id, case.owner_email)
         status("READING")
         read = ReadResult()
         for doc, key in case.files.items():
@@ -46,5 +48,5 @@ def run_pipeline(case_id: str, deps) -> None:
         register_invoices(ctx)
         db.update_case(case_id, status="READY", step=None, **report)
     except Exception as e:
-        log.exception("case %s failed during %s", case_id, step)
+        clog.exception("case %s failed during %s", case_id, step)
         db.update_case(case_id, status="FAILED", step=step, error=str(e))
