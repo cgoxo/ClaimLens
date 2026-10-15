@@ -1,0 +1,30 @@
+# gcloud builds submit forensics/catnet --config forensics/catnet/cloudbuild.yaml \
+#   --substitutions _IMAGE=asia-south1-docker.pkg.dev/social-pulse-510513/claimlens/claimlens-forensics:<tag>,_WEIGHTS_SHA256=<sha>
+steps:
+  - id: weights
+    name: python:3.11-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        pip install -q gdown==5.2.0
+        gdown --folder "https://drive.google.com/drive/folders/1hBEfnFtGG6q_srBHVEmbF3fTq0IhP8jq" -O /workspace/dl --remaining-ok
+        mkdir -p weights
+        cp "$(find /workspace/dl -name CAT_full_v2.pth.tar | head -1)" weights/CAT_full_v2.pth.tar
+        sha="$(sha256sum weights/CAT_full_v2.pth.tar | cut -d' ' -f1)"
+        echo "CAT_full_v2.pth.tar sha256 $sha"
+        if [ -n "${_WEIGHTS_SHA256}" ] && [ "$sha" != "${_WEIGHTS_SHA256}" ]; then echo "weights checksum mismatch" >&2; exit 1; fi
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "."]
+  - id: test
+    name: gcr.io/cloud-builders/docker
+    args: ["run", "--rm", "--entrypoint", "python", "${_IMAGE}", "-m", "pytest", "-q", "/app/test_run_job.py"]
+images: ["${_IMAGE}"]
+substitutions:
+  _WEIGHTS_SHA256: ""
+options:
+  machineType: E2_HIGHCPU_8
+  diskSizeGb: "100"
+timeout: 3600s

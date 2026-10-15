@@ -1,0 +1,10 @@
+# torch is installed first from the CUDA 12.1 index (see Dockerfile): 2.4.1 still loads full checkpoints
+numpy==1.26.4
+Cython==3.0.11
+pyyaml==6.0.2
+yacs==0.1.8
+torch-dct==0.1.6
+pillow==10.4.0
+opencv-python-headless==4.10.0.84
+google-cloud-storage==2.18.2
+pytest==8.3.3
