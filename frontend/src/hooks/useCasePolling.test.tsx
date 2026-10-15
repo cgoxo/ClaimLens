@@ -41,6 +41,14 @@ test("stops at FAILED", async () => {
   expect(getCase).toHaveBeenCalledTimes(1);
 });
 
+test("stops at REJECTED", async () => {
+  const { client, getCase } = fakeClient(withStatus("REJECTED"));
+  renderHook(() => useCasePolling("c1", client));
+  await tick(0);
+  await tick();
+  expect(getCase).toHaveBeenCalledTimes(1);
+});
+
 test("no calls after unmount", async () => {
   const { client, getCase } = fakeClient(withStatus("READING"));
   const { unmount } = renderHook(() => useCasePolling("c1", client));

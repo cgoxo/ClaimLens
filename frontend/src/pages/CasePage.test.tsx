@@ -171,3 +171,14 @@ test("opening a finished case refreshes the case list so its new badge clears", 
   await screen.findByLabelText("Risk high, score 100 of 100");
   await waitFor(() => expect(listCases).toHaveBeenCalledTimes(2));
 });
+
+test("a rejected case says which files stopped it and why", async () => {
+  setup({}, { ...sampleCase, status: "REJECTED", findings: [], risk: null, score: null, context: null,
+    rejected: [{ name: "resume.pdf", form: "Claim", reason: "This is a CV, not an insurance document.", page: 5,
+      quote: "Curriculum Vitae" }] });
+  expect(await screen.findByRole("heading", { name: "This claim can't be analysed" })).toBeInTheDocument();
+  expect(screen.getByText("resume.pdf")).toBeInTheDocument();
+  expect(screen.getByText(/This is a CV, not an insurance document\./)).toBeInTheDocument();
+  expect(screen.getByText(/Curriculum Vitae/)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Start a new case" })).toHaveAttribute("href", "/");
+});

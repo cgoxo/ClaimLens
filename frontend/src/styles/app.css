@@ -284,3 +284,4 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
 .thumb-group { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .thumb-group + .thumb-group { padding-left: var(--space-2); border-left: 1px solid var(--rule); }
 .thumb-group-label { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.rejected-files { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-2); }

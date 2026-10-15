@@ -28,7 +28,7 @@ export default function CasePage() {
 
   // the server marks a finished case seen when it is fetched; refresh the list so badges and the tab count follow
   const { refresh } = useCaseWatcher();
-  const finished = data?.status === "READY" || data?.status === "FAILED";
+  const finished = data?.status === "READY" || data?.status === "FAILED" || data?.status === "REJECTED";
   useEffect(() => {
     if (finished) void refresh(true);
   }, [finished, refresh]);
@@ -82,6 +82,24 @@ export default function CasePage() {
     body = <div className="notice-card"><h1>Couldn't open this case</h1><p>{error.detail}</p></div>;
   } else if (!data) {
     body = <p className="loading">Opening the case file…</p>;
+  } else if (data.status === "REJECTED") {
+    body = (
+      <div className="notice-card notice-failed">
+        <h1>This claim can't be analysed</h1>
+        <p>{(data.rejected ?? []).length > 1 ? "These files don't" : "This file doesn't"} belong in this claim,
+          so the analysis stopped before it started:</p>
+        <ul className="rejected-files">
+          {(data.rejected ?? []).map((r) => (
+            <li key={`${r.name}-${r.page}`}>
+              <strong className="mono">{r.name}</strong> ({r.form} form): {r.reason}
+              {r.quote && <span className="muted"> It reads <q>{r.quote}</q>.</span>}
+            </li>
+          ))}
+        </ul>
+        <p>Remove {(data.rejected ?? []).length > 1 ? "them" : "it"}, or put it in the right form, and upload the claim again.</p>
+        <Link to="/" className="btn btn-primary">Start a new case</Link>
+      </div>
+    );
   } else if (data.status === "FAILED") {
     body = (
       <div className="notice-card notice-failed">

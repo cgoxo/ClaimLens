@@ -68,3 +68,7 @@ test("asks only when the user hasn't decided", () => {
   askPermission();
   expect((Notification as typeof Fake).requestPermission).not.toHaveBeenCalled();
 });
+
+test("text for a rejected case", () => {
+  expect(finishedText({ ...ready, status: "REJECTED" })).toBe("Case 3f2a91 can't be analysed: some files aren't insurance documents");
+});

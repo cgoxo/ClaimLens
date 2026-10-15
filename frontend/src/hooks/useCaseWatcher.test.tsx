@@ -168,3 +168,10 @@ test("track during an older in-flight refresh still fetches again afterwards", a
   expect(listCases).toHaveBeenCalledTimes(2);
   expect(notifyFinished).toHaveBeenCalledTimes(1);
 });
+
+test("a rejected case notifies too", async () => {
+  setup([[row("a", "READING")], [row("a", "REJECTED")]]);
+  await tick(0);
+  await tick(5000);
+  expect(notifyFinished).toHaveBeenCalledTimes(1);
+});

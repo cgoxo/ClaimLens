@@ -7,7 +7,7 @@ import { useToast } from "../components/Toast";
 import { finishedText, notifyFinished } from "../lib/notify";
 
 const RUNNING = new Set<Status>(["QUEUED", "READING", "CHECKING", "PROVING"]);
-const FINAL = new Set<Status>(["READY", "FAILED"]);
+const FINAL = new Set<Status>(["READY", "FAILED", "REJECTED"]);
 
 interface Watcher {
   cases: CaseSummary[];

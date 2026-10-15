@@ -1,7 +1,16 @@
 // Mirrors the backend JSON (backend/claimlens/models.py and api.py).
 
 export type Severity = "critical" | "high" | "medium" | "low" | "coverage";
-export type Status = "DRAFT" | "QUEUED" | "READING" | "CHECKING" | "PROVING" | "READY" | "FAILED";
+export type Status = "DRAFT" | "QUEUED" | "READING" | "CHECKING" | "PROVING" | "READY" | "FAILED" | "REJECTED";
+
+/** A file that stopped the case: not an insurance document, or in the wrong form. */
+export interface RejectedFile {
+  name: string;
+  form: string;
+  reason: string;
+  page: number;
+  quote: string;
+}
 export type CardRole = "claim" | "policy";
 
 /** One of the two upload forms: the claim (claim form, supporting documents, the bill) or the policy. */
@@ -34,7 +43,7 @@ export interface Review {
 
 export interface Finding {
   id: string;
-  check: "tamper" | "story" | "duplicate" | "coverage";
+  check: "tamper" | "story" | "duplicate" | "cards" | "coverage";
   code: string;
   severity: Severity;
   title: string;
@@ -91,6 +100,7 @@ export interface Case {
   summary: string | null;
   dropped_findings: { title: string; reason: string }[];
   context: CaseContextData | null;
+  rejected?: RejectedFile[];
   cards: CaseCard[];
   progress: CaseProgress | null;
   finished_at: string | null;

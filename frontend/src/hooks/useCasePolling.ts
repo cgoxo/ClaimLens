@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { ApiError, type Client } from "../api/client";
 import type { Case } from "../api/types";
 
-const FINAL = new Set(["READY", "FAILED"]);
+const FINAL = new Set(["READY", "FAILED", "REJECTED"]);
 const FATAL = new Set([401, 403, 404]);
 const LOST_AFTER = 5;
 
-/** Fetch a case every `intervalMs` until it is READY or FAILED. */
+/** Fetch a case every `intervalMs` until it is READY, FAILED or REJECTED. */
 export function useCasePolling(id: string, client: Client, intervalMs = 2000) {
   const [data, setData] = useState<Case | null>(null);
   const [error, setError] = useState<ApiError | null>(null);

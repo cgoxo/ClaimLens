@@ -16,6 +16,7 @@ export function askPermission(): void {
 
 export function finishedText(c: CaseSummary): string {
   if (c.status === "FAILED") return `Case ${c.id} failed`;
+  if (c.status === "REJECTED") return `Case ${c.id} can't be analysed: some files aren't insurance documents`;
   return `Case ${c.id} ready: ${(c.risk ?? "unknown").toUpperCase()} risk, ${c.findings_count ?? 0} findings`;
 }
 
