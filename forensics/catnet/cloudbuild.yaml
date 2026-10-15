@@ -16,6 +16,26 @@ steps:
         urllib.request.urlretrieve("https://huggingface.co/jtz18/CAT-NET/resolve/main/CAT_full_v2.pth.tar",
                                    "weights/CAT_full_v2.pth.tar")
         PY
+        # list every Python object the checkpoint's pickles reference, without running them
+        python - <<'PY'
+        import pickletools
+        seen = set()
+        with open("weights/CAT_full_v2.pth.tar", "rb") as f:
+            for _ in range(4):  # legacy torch format: magic, protocol, sys info, then the model's pickle
+                try:
+                    last = []
+                    for op, arg, _pos in pickletools.genops(f):
+                        if op.name == "GLOBAL":
+                            seen.add(arg.replace(" ", "."))
+                        elif op.name in ("SHORT_BINUNICODE", "BINUNICODE", "UNICODE"):
+                            last = (last + [arg])[-2:]
+                        elif op.name == "STACK_GLOBAL" and len(last) == 2:
+                            seen.add(".".join(last))
+                except Exception as e:
+                    print("scan stopped:", type(e).__name__)
+                    break
+        print("pickle globals:", sorted(seen))
+        PY
         sha="$(sha256sum weights/CAT_full_v2.pth.tar | cut -d' ' -f1)"
         echo "CAT_full_v2.pth.tar sha256 $sha"
         if [ -n "${_WEIGHTS_SHA256}" ] && [ "$sha" != "${_WEIGHTS_SHA256}" ]; then echo "weights checksum mismatch" >&2; exit 1; fi
