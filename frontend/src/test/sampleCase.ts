@@ -20,8 +20,8 @@ export const sampleCase: Case = {
   "dropped_findings": [],
   "progress": null,
   "cards": [
-    { "id": "claim", "role": "claim_form", "kind": null, "label": "Claim form", "files": [{ "name": "claim.pdf", "pages": 0 }] },
-    { "id": "policy", "role": "policy", "kind": null, "label": "Policy", "files": [{ "name": "policy.pdf", "pages": 0 }] }
+    { "id": "claim", "role": "claim", "label": "Claim", "files": [{ "name": "claim.pdf", "pages": 0 }] },
+    { "id": "policy", "role": "policy", "label": "Policy", "files": [{ "name": "policy.pdf", "pages": 0 }] }
   ],
   "finished_at": "2026-10-15T19:13:35.028353Z",
   "seen_at": null,
@@ -249,6 +249,7 @@ export const sampleCase: Case = {
       "doc": "claim",
       "page": 1,
       "card_id": null,
+      "file_index": 0,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -257,6 +258,7 @@ export const sampleCase: Case = {
       "doc": "claim",
       "page": 2,
       "card_id": null,
+      "file_index": 0,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -265,6 +267,7 @@ export const sampleCase: Case = {
       "doc": "claim",
       "page": 3,
       "card_id": null,
+      "file_index": 0,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -273,6 +276,7 @@ export const sampleCase: Case = {
       "doc": "claim",
       "page": 4,
       "card_id": null,
+      "file_index": 0,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -281,6 +285,7 @@ export const sampleCase: Case = {
       "doc": "policy",
       "page": 1,
       "card_id": null,
+      "file_index": 0,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -289,6 +294,7 @@ export const sampleCase: Case = {
       "doc": "policy",
       "page": 2,
       "card_id": null,
+      "file_index": 0,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125
@@ -297,6 +303,7 @@ export const sampleCase: Case = {
       "doc": "policy",
       "page": 3,
       "card_id": null,
+      "file_index": 0,
       "kind": "digital",
       "width": 595.2755737304688,
       "height": 841.8897705078125

@@ -50,9 +50,3 @@ test("a one-day stay reads as 1 day", () => {
   setup({ ...context, claim: { ...context.claim, discharge_date: { ...claim.discharge_date, value: "11-Mar-2026" } } });
   expect(screen.getByText(/\(1 day\)/)).toBeInTheDocument();
 });
-
-test("a bill is named by its card when the case has cards", () => {
-  const claim = context.claim as { bills: Record<string, unknown>[] };
-  setup({ ...context, claim: { ...context.claim, bills: [{ ...claim.bills[1], card: "Bill 2 · pharmacy" }] } });
-  expect(screen.getByText(/Bill 2 · pharmacy/)).toBeInTheDocument();
-});

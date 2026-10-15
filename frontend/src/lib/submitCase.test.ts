@@ -5,17 +5,15 @@ import type { DraftCard } from "./upload";
 const pdf = (name: string) => new File(["%PDF"], name);
 const a = pdf("a.pdf"), b = pdf("b.pdf"), c = pdf("c.pdf"), p = pdf("p.pdf");
 const cards: DraftCard[] = [
-  { id: "claim-form", role: "claim_form", kind: null, files: [a] },
-  { id: "b1", role: "bill", kind: "hospital", files: [b, c] },
-  { id: "supporting", role: "supporting", kind: null, files: [] },
-  { id: "policy", role: "policy", kind: null, files: [p] },
+  { id: "claim", role: "claim", files: [a, b, c] },
+  { id: "policy", role: "policy", files: [p] },
 ];
 
 function fakeClient(failOn?: File) {
   const calls: string[] = [];
   const client = {
     createDraft: vi.fn(async (_cards: { id: string }[]) => { calls.push("draft"); return { case_id: "c1", status: "DRAFT" as const }; }),
-    uploadFile: vi.fn(async (_id: string, card: string, file: File) => {
+    uploadFile: vi.fn(async (_id: string, card: string, file: File, _clientId: string) => {
       calls.push(`${card}/${file.name}`);
       if (file === failOn) throw new ApiError(400, "b1: not a readable PDF file");
       return { card_id: card, index: 0, pages: 1 };
@@ -30,7 +28,7 @@ test("creates the draft, uploads every file in card order, then submits", async 
   const progress = vi.fn();
   const state: SubmitState = { uploaded: new Set() };
   expect(await submitCase(client, cards, state, progress)).toBe("c1");
-  expect(calls).toEqual(["draft", "claim-form/a.pdf", "b1/b.pdf", "b1/c.pdf", "policy/p.pdf", "submit"]);
+  expect(calls).toEqual(["draft", "claim/a.pdf", "claim/b.pdf", "claim/c.pdf", "policy/p.pdf", "submit"]);
   expect(progress).toHaveBeenLastCalledWith(4, 4);
 });
 
@@ -43,12 +41,23 @@ test("a failed file stops the run; a retry uploads only what is left", async () 
 
   const retry = fakeClient();
   await submitCase(retry.client, cards, state, vi.fn());
-  expect(retry.calls).toEqual(["b1/c.pdf", "policy/p.pdf", "submit"]);
+  expect(retry.calls).toEqual(["claim/c.pdf", "policy/p.pdf", "submit"]);
   expect(retry.raw.createDraft).not.toHaveBeenCalled();
 });
 
-test("empty cards are not sent", async () => {
-  const { raw, client } = fakeClient();
-  await submitCase(client, cards, { uploaded: new Set() }, vi.fn());
-  expect(raw.createDraft.mock.calls[0][0].map((card: { id: string }) => card.id)).toEqual(["claim-form", "b1", "policy"]);
+test("every file carries one id, the same on a re-send", async () => {
+  const first = fakeClient(c);
+  const state: SubmitState = { uploaded: new Set() };
+  await submitCase(first.client, cards, state, vi.fn()).catch(() => {});
+  const retry = fakeClient();
+  await submitCase(retry.client, cards, state, vi.fn());
+  const idOf = (calls: unknown[][], f: File) => calls.find((call) => call[2] === f)![3];
+  expect(idOf(retry.raw.uploadFile.mock.calls, c)).toBe(idOf(first.raw.uploadFile.mock.calls, c));
+  expect(new Set(first.raw.uploadFile.mock.calls.map((call) => call[3])).size).toBe(3);
+});
+
+test("a submit that already went through (lost response, 409) still opens the case", async () => {
+  const { client, raw } = fakeClient();
+  raw.submit.mockRejectedValueOnce(new ApiError(409, "This case was already submitted"));
+  expect(await submitCase(client, cards, { uploaded: new Set() }, vi.fn())).toBe("c1");
 });

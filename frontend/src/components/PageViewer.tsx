@@ -18,11 +18,12 @@ interface Props {
 
 const DOCS = [["claim", "Claim"], ["policy", "Policy"]] as const;
 
-/** Consecutive pages of one card, labelled with the card; pages from before cards fall under the document. */
+/** Consecutive pages of one uploaded file, labelled with its name; pages from before cards fall under the document. */
 function groups(pages: PageMeta[], cards: CaseCard[], doc: string): [string, PageMeta[]][] {
   const out: [string, PageMeta[]][] = [];
   for (const p of pages) {
-    const label = cards.find((c) => c.id === p.card_id)?.label ?? (doc === "claim" ? "Claim" : "Policy");
+    const file = cards.find((c) => c.id === p.card_id)?.files[p.file_index];
+    const label = file?.name ?? (doc === "claim" ? "Claim" : "Policy");
     const last = out[out.length - 1];
     if (last && last[0] === label) last[1].push(p);
     else out.push([label, [p]]);

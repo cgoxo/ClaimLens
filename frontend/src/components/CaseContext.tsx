@@ -57,7 +57,7 @@ export default function CaseContext({ context, mismatch, onOpen }: Props) {
   const discharged = text(fact(claim, "discharge_date"));
   const days = admitted && discharged ? daysBetween(admitted, discharged) : null;
   const procedures = (claim?.procedures ?? []) as { name: Fact; date?: Fact }[];
-  const bills = (claim?.bills ?? []) as { kind: string; card?: string; total?: Fact; page: number }[];
+  const bills = (claim?.bills ?? []) as { kind: string; total?: Fact; page: number }[];
   const waits = (policy?.waiting_periods ?? []) as { condition: string; months: number; clause: string; page: number; quote: string }[];
   const age = context.policy_age_months;
 
@@ -84,7 +84,7 @@ export default function CaseContext({ context, mismatch, onOpen }: Props) {
           <Row label="Bills">
             {bills.length ? bills.map((b, i) => (
               <span key={i} className="ctx-line">
-                <span className={b.card ? "" : "ctx-kind"}>{b.card ?? b.kind}</span> {amount(b.total ?? null) ?? "total not found"}{" "}
+                <span className="ctx-kind">{b.kind}</span> {amount(b.total ?? null) ?? "total not found"}{" "}
                 {b.total && <PageLink label={`Bill ${i + 1}`} doc="claim" page={b.total.page} quote={b.total.quote} bbox={b.total.bbox} onOpen={onOpen} />}
               </span>
             )) : null}

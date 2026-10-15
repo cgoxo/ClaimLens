@@ -2,14 +2,12 @@
 
 export type Severity = "critical" | "high" | "medium" | "low" | "coverage";
 export type Status = "DRAFT" | "QUEUED" | "READING" | "CHECKING" | "PROVING" | "READY" | "FAILED";
-export type CardRole = "claim_form" | "bill" | "supporting" | "policy";
-export type BillKind = "hospital" | "pharmacy" | "lab" | "other";
+export type CardRole = "claim" | "policy";
 
-/** A card as the user lays it out: a group of files that belong together (one bill, the policy...). */
+/** One of the two upload forms: the claim (claim form, supporting documents, the bill) or the policy. */
 export interface CardSpec {
   id: string;
   role: CardRole;
-  kind: BillKind | null;
 }
 
 export interface CaseCard extends CardSpec {
@@ -54,6 +52,7 @@ export interface PageMeta {
   width: number;
   height: number;
   card_id: string | null;
+  file_index: number;
 }
 
 export interface Fact {

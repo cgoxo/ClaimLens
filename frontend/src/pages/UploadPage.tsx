@@ -10,20 +10,22 @@ import { askPermission } from "../lib/notify";
 import { submitCase, UploadFailed, type SubmitState } from "../lib/submitCase";
 import { checkCards, type DraftCard } from "../lib/upload";
 
-const SAMPLE: [string, DraftCard["role"], DraftCard["kind"], string, string][] = [
-  ["claim-form", "claim_form", null, "claim-form.pdf", "application/pdf"],
-  ["b1", "bill", "hospital", "hospital-bill.pdf", "application/pdf"],
-  ["b2", "bill", "pharmacy", "pharmacy-bill.jpg", "image/jpeg"],
-  ["supporting", "supporting", null, "discharge-summary.pdf", "application/pdf"],
-  ["policy", "policy", null, "policy.pdf", "application/pdf"],
-];
+const SAMPLE: Record<DraftCard["role"], [string, string][]> = {
+  claim: [["claim-form.pdf", "application/pdf"], ["discharge-summary.pdf", "application/pdf"],
+    ["hospital-bill.pdf", "application/pdf"], ["pharmacy-bill.jpg", "image/jpeg"]],
+  policy: [["policy.pdf", "application/pdf"]],
+};
+
+async function sampleFile(name: string, type: string): Promise<File> {
+  const res = await fetch(`/samples/${name}`);
+  if (!res.ok) throw new Error(`Couldn't load the sample ${name}`);
+  return new File([await res.blob()], name, { type });
+}
 
 async function sampleCards(): Promise<DraftCard[]> {
-  return Promise.all(SAMPLE.map(async ([id, role, kind, name, type]) => {
-    const res = await fetch(`/samples/${name}`);
-    if (!res.ok) throw new Error(`Couldn't load the sample ${name}`);
-    return { id, role, kind, files: [new File([await res.blob()], name, { type })] };
-  }));
+  const files = async (role: DraftCard["role"]) => Promise.all(SAMPLE[role].map(([n, t]) => sampleFile(n, t)));
+  return [{ id: "claim", role: "claim", files: await files("claim") },
+    { id: "policy", role: "policy", files: await files("policy") }];
 }
 
 export default function UploadPage() {
@@ -76,8 +78,9 @@ export default function UploadPage() {
         <section className="intro">
           <h1>Open a case file</h1>
           <p className="lede">
-            Add the claim, one card per bill, and the policy it's claimed against. ClaimLens checks for edited
-            files, stories that don't add up, reused invoices and uncovered items, and cites the page for each.
+            Add the claim (the claim form, supporting documents and the bill, every page or photo) and the policy
+            it's claimed against. ClaimLens checks for edited files, stories that don't add up, reused invoices
+            and uncovered items, and cites the page for each.
           </p>
         </section>
 
@@ -96,7 +99,7 @@ export default function UploadPage() {
           <button className="btn btn-quiet" disabled={busy} onClick={() => void open(sampleCards, true)}>
             Try the sample claim
           </button>
-          <span className="muted">A fictional cataract claim: a forged hospital bill and a photographed pharmacy bill.</span>
+          <span className="muted">A fictional cataract claim with a forged hospital bill and a photographed page.</span>
         </div>
 
         <section className="cases" aria-labelledby="cases-title">

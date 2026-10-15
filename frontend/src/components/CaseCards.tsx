@@ -1,24 +1,16 @@
 import { useState, type DragEvent } from "react";
-import type { BillKind, CardRole } from "../api/types";
+import type { CardRole } from "../api/types";
 import { checkFile, type DraftCard } from "../lib/upload";
 
-const MAX_BILLS = 10;
-const KINDS: BillKind[] = ["hospital", "pharmacy", "lab", "other"];
-const TITLES: Record<CardRole, string> = {
-  claim_form: "Claim form", bill: "Bill", supporting: "Supporting documents", policy: "Policy",
-};
+const TITLES: Record<CardRole, string> = { claim: "Claim", policy: "Policy" };
 const HINTS: Record<CardRole, string> = {
-  claim_form: "The filled-in claim form",
-  bill: "Every page or photo of this one bill, in order",
-  supporting: "Discharge summary, prescriptions, reports",
+  claim: "The claim form, supporting documents and the bill: every page or photo, in order",
   policy: "The policy wording",
 };
 
 export const startingCards = (): DraftCard[] => [
-  { id: "claim-form", role: "claim_form", kind: null, files: [] },
-  { id: "b1", role: "bill", kind: "hospital", files: [] },
-  { id: "supporting", role: "supporting", kind: null, files: [] },
-  { id: "policy", role: "policy", kind: null, files: [] },
+  { id: "claim", role: "claim", files: [] },
+  { id: "policy", role: "policy", files: [] },
 ];
 
 interface Props {
@@ -29,57 +21,42 @@ interface Props {
   errors: Map<File, string>;
 }
 
-/** One claim, grouped the way the documents belong together: each bill its own card. */
+/** The two upload forms: the claim (claim form, supporting documents and its one bill) and the policy. */
 export default function CaseCards({ cards, onChange, busy, errors }: Props) {
   const [refused, setRefused] = useState<Record<string, string>>({});
-  const bills = cards.filter((c) => c.role === "bill");
-  const title = (card: DraftCard) => card.role === "bill" ? `Bill ${bills.indexOf(card) + 1}` : TITLES[card.role];
-  const update = (id: string, change: Partial<DraftCard>) =>
-    onChange(cards.map((c) => (c.id === id ? { ...c, ...change } : c)));
+  const update = (id: string, files: File[]) => onChange(cards.map((c) => (c.id === id ? { ...c, files } : c)));
 
   function add(card: DraftCard, list: FileList | null) {
     const files = [...(list ?? [])];
     const bad = files.map((f) => [f, checkFile(f)] as const).filter(([, e]) => e);
     setRefused((r) => ({ ...r, [card.id]: bad.map(([f, e]) => `${f.name}: ${e}`).join(" · ") }));
     const ok = files.filter((f) => !checkFile(f));
-    if (ok.length) update(card.id, { files: [...card.files, ...ok] });
+    if (ok.length) update(card.id, [...card.files, ...ok]);
   }
 
   function move(card: DraftCard, i: number, by: number) {
     const files = [...card.files];
     [files[i], files[i + by]] = [files[i + by], files[i]];
-    update(card.id, { files });
-  }
-
-  function addBill() {
-    const n = Math.max(0, ...bills.map((b) => Number(b.id.slice(1)) || 0)) + 1;
-    const at = cards.findIndex((c) => c.role === "supporting");
-    const next = [...cards];
-    next.splice(at < 0 ? cards.length : at, 0, { id: `b${n}`, role: "bill", kind: "hospital", files: [] });
-    onChange(next);
+    update(card.id, files);
   }
 
   return (
     <div className="case-cards">
       {cards.map((card) => (
-        <Card key={card.id} card={card} title={title(card)} busy={busy} refused={refused[card.id]} errors={errors}
+        <Card key={card.id} card={card} busy={busy} refused={refused[card.id]} errors={errors}
           onAdd={(list) => add(card, list)} onMove={(i, by) => move(card, i, by)}
-          onRemoveFile={(i) => update(card.id, { files: card.files.filter((_, j) => j !== i) })}
-          onKind={(kind) => update(card.id, { kind })}
-          onRemove={card.role === "bill" && bills.length > 1 ? () => onChange(cards.filter((c) => c.id !== card.id)) : undefined} />
+          onRemoveFile={(i) => update(card.id, card.files.filter((_, j) => j !== i))} />
       ))}
-      <button type="button" className="btn btn-quiet add-bill" disabled={busy || bills.length >= MAX_BILLS}
-        onClick={addBill}>+ Add bill</button>
     </div>
   );
 }
 
-function Card({ card, title, busy, refused, errors, onAdd, onMove, onRemoveFile, onKind, onRemove }: {
-  card: DraftCard; title: string; busy: boolean; refused?: string; errors: Map<File, string>;
+function Card({ card, busy, refused, errors, onAdd, onMove, onRemoveFile }: {
+  card: DraftCard; busy: boolean; refused?: string; errors: Map<File, string>;
   onAdd(list: FileList | null): void; onMove(i: number, by: number): void; onRemoveFile(i: number): void;
-  onKind(kind: BillKind): void; onRemove?: () => void;
 }) {
   const [over, setOver] = useState(false);
+  const title = TITLES[card.role];
   const inputId = `card-${card.id}`;
   const drop = (e: DragEvent) => {
     e.preventDefault();
@@ -90,17 +67,7 @@ function Card({ card, title, busy, refused, errors, onAdd, onMove, onRemoveFile,
     <section className={`tray case-card${over ? " is-over" : ""}${card.files.length ? " is-filled" : ""}`}
       aria-labelledby={`${inputId}-title`}
       onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
-      <div className="case-card-head">
-        <h2 id={`${inputId}-title`} className="tray-title">{title}</h2>
-        {card.role === "bill" && (
-          <select aria-label={`Kind of ${title}`} value={card.kind ?? "hospital"} disabled={busy}
-            onChange={(e) => onKind(e.target.value as BillKind)}>
-            {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-          </select>
-        )}
-        {onRemove && <button type="button" className="btn-icon" aria-label={`Remove ${title}`} disabled={busy}
-          onClick={onRemove}>✕</button>}
-      </div>
+      <h2 id={`${inputId}-title`} className="tray-title">{title}</h2>
       {card.files.length > 0 && (
         <ol className="card-files">
           {card.files.map((file, i) => (

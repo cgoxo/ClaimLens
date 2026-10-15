@@ -52,9 +52,10 @@ export function createClient(getHeaders: () => Promise<Headers>, onUnauthorized:
     },
 
     /** Step 2 of 3: one file into one card (one per request: Cloud Run caps a request at 32 MB). */
-    uploadFile(caseId: string, cardId: string, file: File) {
+    uploadFile(caseId: string, cardId: string, file: File, clientId: string) {
       const body = new FormData();
       body.append("card_id", cardId);
+      body.append("client_id", clientId); // the same id on a re-send, so the server keeps the file once
       body.append("file", file);
       return getJson<{ card_id: string; index: number; pages: number }>(
         `/api/cases/${encodeURIComponent(caseId)}/files`, { method: "POST", body });

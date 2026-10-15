@@ -277,7 +277,6 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
 .card-files li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .card-file-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .card-file-error { flex-basis: 100%; margin: 0; font-size: 13px; }
-.add-bill { align-self: start; }
 .open-row { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
 
 /* ---------- viewer: pages grouped by card ---------- */

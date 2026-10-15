@@ -38,7 +38,7 @@ test("401 calls onUnauthorized once and throws", async () => {
 
 test("createDraft posts the cards as JSON", async () => {
   fetchMock.mockResolvedValue(json(201, { case_id: "c1", status: "DRAFT" }));
-  const cards = [{ id: "b1", role: "bill" as const, kind: "hospital" as const }];
+  const cards = [{ id: "claim", role: "claim" as const }, { id: "policy", role: "policy" as const }];
   expect(await client().createDraft(cards)).toEqual({ case_id: "c1", status: "DRAFT" });
   const [url, init] = fetchMock.mock.calls[0];
   expect([url, init.method]).toEqual(["/api/cases", "POST"]);
@@ -47,12 +47,13 @@ test("createDraft posts the cards as JSON", async () => {
 });
 
 test("uploadFile posts one file with its card", async () => {
-  fetchMock.mockResolvedValue(json(201, { card_id: "b1", index: 0, pages: 2 }));
+  fetchMock.mockResolvedValue(json(201, { card_id: "claim", index: 0, pages: 2 }));
   const file = new File(["%PDF"], "bill.pdf");
-  expect(await client().uploadFile("c1", "b1", file)).toEqual({ card_id: "b1", index: 0, pages: 2 });
+  expect(await client().uploadFile("c1", "claim", file, "f-1")).toEqual({ card_id: "claim", index: 0, pages: 2 });
   const [url, init] = fetchMock.mock.calls[0];
   expect(url).toBe("/api/cases/c1/files");
-  expect((init.body as FormData).get("card_id")).toBe("b1");
+  expect((init.body as FormData).get("card_id")).toBe("claim");
+  expect((init.body as FormData).get("client_id")).toBe("f-1");
   expect(((init.body as FormData).get("file") as File).name).toBe("bill.pdf");
   expect(new Headers(init.headers).has("content-type")).toBe(false);
 });

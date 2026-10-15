@@ -15,17 +15,14 @@ test("rejects files over 20 MB", () => {
   expect(checkFile(file("x.pdf", 21 * 1024 * 1024))).toBe("File is larger than 20 MB");
 });
 
-const card = (id: string, role: DraftCard["role"], files: File[] = [], kind: DraftCard["kind"] = null): DraftCard =>
-  ({ id, role, kind, files });
+const card = (id: string, role: DraftCard["role"], files: File[] = []): DraftCard => ({ id, role, files });
 
 test("case totals", () => {
   const policy = card("policy", "policy", [file("p.pdf")]);
-  const bill = card("b1", "bill", [file("b.pdf")], "hospital");
-  expect(checkCards([bill, policy])).toBeNull();
-  expect(checkCards([bill, card("policy", "policy")])).toBe("Add the policy");
-  expect(checkCards([card("b1", "bill", [], "hospital"), policy])).toBe("Add the claim documents");
-  expect(checkCards([card("b1", "bill", Array.from({ length: 40 }, (_, i) => file(`${i}.pdf`)), "lab"), policy]))
+  const claim = card("claim", "claim", [file("b.pdf")]);
+  expect(checkCards([claim, policy])).toBeNull();
+  expect(checkCards([claim, card("policy", "policy")])).toBe("Add the policy");
+  expect(checkCards([card("claim", "claim"), policy])).toBe("Add the claim documents");
+  expect(checkCards([card("claim", "claim", Array.from({ length: 40 }, (_, i) => file(`${i}.pdf`))), policy]))
     .toBe("At most 40 files");
-  const bills = Array.from({ length: 11 }, (_, i) => card(`b${i}`, "bill", [file("b.pdf")], "other"));
-  expect(checkCards([...bills, policy])).toBe("At most 10 bills");
 });
