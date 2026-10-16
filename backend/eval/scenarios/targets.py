@@ -39,7 +39,7 @@ class LocalTarget:
     def run(self, recipe, forgeries: list[str], fmt: str, truth) -> CaseResult:
         self.n += 1
         settings = Settings(_env_file=None, data_dir=self.root / f"case{self.n}", ai="fake", jobs="inline",
-                            daily_case_limit=10**6)
+                            daily_case_limit=10**6, bill_story="on")
         deps = build_deps(settings)
         deps.ai = self.ai_factory() if self.ai_factory else TruthAi(truth)
         if self.ocr is not None:

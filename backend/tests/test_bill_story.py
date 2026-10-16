@@ -18,6 +18,7 @@ def _ctx(tmp_path, verdicts):
     shutil.copytree(FAKE_AI, fixtures)
     (fixtures / "bill_story.json").write_text(json.dumps(verdicts))
     c = make_ctx(tmp_path, ai=FakeAi(fixtures))
+    c.deps.settings.bill_story = "on"
     extract(c)
     return c
 
@@ -53,6 +54,7 @@ def test_off_setting_skips_call(ctx):
 
 
 def test_ai_failure_gives_low_note(ctx):
+    ctx.deps.settings.bill_story = "on"
     ctx.deps.ai = Raises()
     found = check_bill_story(ctx)
     assert [(f.code, f.severity) for f in found] == [("bill_story_unavailable", "low")]
