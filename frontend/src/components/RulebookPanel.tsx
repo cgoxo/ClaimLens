@@ -41,6 +41,9 @@ export default function RulebookPanel({ policy, notVerified, onOpenClause }: Pro
     ...asList(p.co_pays).map((r) => ({ label: "Co-pay", text: coPay(r), rule: r })),
     ...asRule(p.deductible).map((r) => ({ label: "Deductible", text: `${money(num(r.amount))} per ${r.per ?? "claim"}`, rule: r })),
     ...asRule(p.room_limit).map((r) => ({ label: "Room rent", text: limit(r), rule: r })),
+    // older cases: only the plain per-day room limit was read (a Fact with a value, not a rule)
+    ...(p.room_limit ? [] : asRule(p.room_rent_limit_per_day).map((r) => ({
+      label: "Room rent", text: `${typeof r.value === "number" ? money(r.value) : String(r.value)} per day`, rule: r }))),
     ...asRule(p.icu_limit).map((r) => ({ label: "ICU", text: limit(r), rule: r })),
     ...asRule(p.proportionate_deduction).map((r) => ({ label: "Proportionate deduction", text: "Other charges are cut in the same proportion as room rent", rule: r })),
     ...asList(p.sub_limits).map((r) => ({ label: "Sub-limit", text: `${r.applies_to}: ${limit(r).replace(/ per day$/, "")}${num(r.amount) !== null || num(r.percent_of_si) !== null ? ` per ${r.per ?? "claim"}` : ""}`, rule: r })),

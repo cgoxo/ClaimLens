@@ -36,3 +36,10 @@ test("lists rules that could not be verified", () => {
   expect(screen.getByText("Rules not verified")).toBeInTheDocument();
   expect(screen.getByText("deductible")).toBeInTheDocument();
 });
+
+test("an older policy shows its plain room limit as a Room rent row", () => {
+  const p = { room_rent_limit_per_day: { value: 3000, page: 2, quote: "Rs 3,000 per day" } };
+  render(<RulebookPanel policy={p} notVerified={[]} onOpenClause={vi.fn()} />);
+  expect(screen.getByText("Room rent")).toBeInTheDocument();
+  expect(screen.getByText(/3,000 per day/)).toBeInTheDocument();
+});

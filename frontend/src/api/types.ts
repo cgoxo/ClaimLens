@@ -119,6 +119,7 @@ export interface Finding {
   citations: Citation[];
   amount_not_payable: number;
   deductions?: LineDeduction[];
+  items: string[];
   verified: boolean;
   review: Review | null;
 }

@@ -147,7 +147,14 @@ export default function CasePage() {
               <Recommendation analysis={data.analysis} current={data.current} />
             </div>
           </header>
-          {data.summary && <p className="summary">{data.summary}</p>}
+          {data.summary && (
+            <p className="summary">
+              {data.analysis && data.current && JSON.stringify(data.analysis) !== JSON.stringify(data.current) && (
+                <span className="muted small">At analysis: </span>
+              )}
+              {data.summary}
+            </p>
+          )}
           {settlement && (
             <details className="panel" open>
               <summary>Settlement</summary>
