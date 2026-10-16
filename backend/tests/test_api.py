@@ -218,3 +218,27 @@ def test_other_user_cannot_list_versions(client):
     fid = client.get(f"/api/cases/{cid}", headers=A).json()["findings"][0]["id"]
     assert client.get(f"/api/cases/{cid}/findings/{fid}/versions",
                       headers={"X-Dev-User": "b@x.com"}).status_code == 404
+
+
+def test_restore_needs_a_dismissed_finding(client):
+    cid = _upload(client).json()["case_id"]
+    fid = client.get(f"/api/cases/{cid}", headers=A).json()["findings"][0]["id"]
+    r = _review(client, cid, fid, "restore")
+    assert r.status_code == 409 and r.json()["detail"] == "Only a dismissed finding can be restored"
+    _review(client, cid, fid, "accept")
+    assert _review(client, cid, fid, "restore").status_code == 409
+    _review(client, cid, fid, "dismiss")
+    assert _review(client, cid, fid, "restore").status_code == 200
+
+
+def test_old_case_review_without_context_updates_score(settings):
+    from claimlens.models import Case, Finding
+    deps = build_deps(settings)
+    client = TestClient(create_app(settings, deps))
+    deps.db.create_case(Case(id="old2", owner_email="a@x.com", status="READY", score=40, risk="review", payable=5,
+                             context={"claim": {"amount_claimed": "garbage"}}))
+    deps.db.put_findings("old2", [Finding(id="f1", check="tamper", code="font_outlier", severity="critical",
+                                          title="Font")])
+    assert _review(client, "old2", "f1", "dismiss").status_code == 200
+    case = deps.db.get_case("old2")
+    assert case.score == 0 and case.risk == "low" and case.payable == 5

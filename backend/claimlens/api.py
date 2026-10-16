@@ -12,6 +12,7 @@ from claimlens.cards import card_label, cards_of, layout_error, stream_of
 from claimlens.models import Card, CardRole, Case, CaseFile, ClaimFacts, Finding, Outcome, PolicyFacts, Review, now
 from claimlens.pipeline.outcome import outcome
 from claimlens.pipeline.read import open_document
+from claimlens.pipeline.report import risk_band, score
 
 RUNNING = {"QUEUED", "READING", "CHECKING", "PROVING"}
 FINISHED = {"READY", "FAILED", "REJECTED"}
@@ -203,14 +204,16 @@ class ReviewIn(BaseModel):
 def _recalculate(db, case_id: str, findings: list[Finding]):
     """Recompute the outcome after a review and store it. Older cases keep their stored payable."""
     case = db.get_case(case_id)
+    if case.analysis is None:  # analysed before the rulebook: no settlement to recompute, keep the stored payable
+        kept = [f for f in findings if not (f.review and f.review.action == "dismiss")]
+        value = score(kept)
+        o = Outcome(score=value, risk=risk_band(value), payable=case.payable)
+        db.update_case(case_id, current=o, score=o.score, risk=o.risk)
+        return o
     context = case.context or {}
     facts = ClaimFacts.model_validate(context["claim"]) if context.get("claim") else None
     policy = PolicyFacts.model_validate(context["policy"]) if context.get("policy") else None
     o = outcome(policy, facts, findings)
-    if case.analysis is None:  # analysed before the rulebook: no settlement to recompute, keep the stored payable
-        o = Outcome(score=o.score, risk=o.risk, payable=case.payable)
-        db.update_case(case_id, current=o, score=o.score, risk=o.risk)
-        return o
     db.update_case(case_id, current=o, score=o.score, risk=o.risk, payable=o.payable)
     return o
 
@@ -222,6 +225,8 @@ def review(case_id: str, fid: str, body: ReviewIn, request: Request, user: str =
     before = next((f for f in db.get_findings(case_id) if f.id == fid), None)
     if before is None:
         raise HTTPException(404, "Finding not found")
+    if body.action == "restore" and not (before.review and before.review.action == "dismiss"):
+        raise HTTPException(409, "Only a dismissed finding can be restored")
     if not db.get_finding_versions(case_id, fid):
         db.add_finding_version(case_id, fid, before, "analysis", "pipeline", "")
     new = None if body.action == "restore" else Review(action=body.action, note=body.note, by=user)
