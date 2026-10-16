@@ -6,8 +6,10 @@ from collections import Counter
 from rapidfuzz import fuzz
 
 from claimlens.models import Citation, Fact, Finding
+from claimlens.pipeline.checks.coverage import ICU_WORDS, ROOM_WORDS, _kind_lines
 from claimlens.pipeline.context import Ctx
-from claimlens.pipeline.text import parse_date, parse_money
+from claimlens.pipeline.rules import stay_nights
+from claimlens.pipeline.text import normalise, parse_date, parse_money
 
 
 def _cite(fact: Fact) -> Citation:
@@ -136,8 +138,48 @@ def _policy_number_mismatch(ctx: Ctx) -> list[Finding]:
     return [finding.model_copy(update={"citations": [*finding.citations, cite_policy]})]
 
 
+def _room_days_exceed_stay(ctx: Ctx) -> list[Finding]:
+    f = ctx.claim_facts
+    nights = stay_nights(f)
+    if nights is None or nights < 0:  # inverted dates are date_order's job
+        return []
+    lines = [line for kind, words in (("room", ROOM_WORDS), ("icu", ICU_WORDS))
+             for _, _, line in _kind_lines(f, kind, words)]
+    days = [(d, line.days) for line in lines if line.days and (d := parse_money(line.days.value)) is not None]
+    if not days and f.room and f.room.days and (d := parse_money(f.room.days.value)) is not None:
+        days = [(d, f.room.days)]
+    total = sum(d for d, _ in days)
+    if not days or total <= nights + 1:
+        return []
+    fact = days[-1][1]
+    return [_finding("room_days_exceed_stay", "high",
+                     f"Room and ICU days add up to {total:g}, but the stay was {nights} nights",
+                     f"The bills charge {total:g} days of room or ICU for a stay of {nights} nights.", fact, 1)]
+
+
+def _duplicate_charge(ctx: Ctx) -> list[Finding]:
+    out, seen = [], set()
+    for bill in ctx.claim_facts.bills:
+        day = parse_date(bill.date.value) if bill.date else None
+        if day is None:
+            continue
+        for line in bill.line_items:
+            amount = parse_money(line.amount.value) if line.amount else None
+            if amount is None:
+                continue
+            key = (normalise(line.desc), amount, day)
+            if key in seen:
+                out.append(_finding("duplicate_charge", "medium",
+                                    f"{line.desc} charged twice on {day:%d-%b-%Y}",
+                                    f"The same item at Rs {amount:,.0f} appears twice on {day:%d-%b-%Y}.",
+                                    line.amount, len(out) + 1))
+            seen.add(key)
+    return out
+
+
 def check_story(ctx: Ctx) -> list[Finding]:
     if ctx.claim_facts is None:
         return []
     return (_sum_mismatch(ctx) + _date_order(ctx) + _inpatient_outside_stay(ctx)
-            + _name_mismatch(ctx) + _claimed_amount_mismatch(ctx) + _policy_number_mismatch(ctx))
+            + _name_mismatch(ctx) + _claimed_amount_mismatch(ctx) + _policy_number_mismatch(ctx)
+            + _room_days_exceed_stay(ctx) + _duplicate_charge(ctx))
