@@ -160,6 +160,21 @@ def _schema(model) -> dict:
     return schema
 
 
+def with_retries(call):
+    """Run call(); a rate limit (429) or a server hiccup (5xx) is retried, anything else is a real error."""
+    for attempt in range(ATTEMPTS):
+        try:
+            return call()
+        except Exception as e:
+            code = getattr(e, "code", None)
+            if attempt == ATTEMPTS - 1 or not (code == 429 or (isinstance(code, int) and code >= 500)):
+                raise
+            wait = 4 * 2 ** attempt * random.uniform(0.75, 1.25)  # jitter: concurrent cases don't retry in step
+            log.warning("Gemini busy (%s), retrying in %.0fs", code, wait)
+            time.sleep(wait)
+    raise RuntimeError("unreachable")
+
+
 class VertexGemini:
     def __init__(self, project: str, location: str, model: str):
         from google import genai
@@ -174,19 +189,9 @@ class VertexGemini:
         if schema is not None:
             config.response_mime_type = "application/json"
             config.response_json_schema = _schema(schema)
-        for attempt in range(ATTEMPTS):
-            try:
-                response = self.client.models.generate_content(model=self.model, contents=text, config=config)
-                return response.text or ""
-            except Exception as e:
-                # a rate limit (429) or a server hiccup (5xx) passes; anything else is a real error
-                code = getattr(e, "code", None)
-                if attempt == ATTEMPTS - 1 or not (code == 429 or (isinstance(code, int) and code >= 500)):
-                    raise
-                wait = 4 * 2 ** attempt * random.uniform(0.75, 1.25)  # jitter: concurrent cases don't retry in step
-                log.warning("Gemini busy (%s), retrying in %.0fs", code, wait)
-                time.sleep(wait)
-        raise RuntimeError("unreachable")
+        response = with_retries(
+            lambda: self.client.models.generate_content(model=self.model, contents=text, config=config))
+        return response.text or ""
 
     def classify_documents(self, files_text: str) -> list[DocLabel]:
         return TypeAdapter(list[DocLabel]).validate_json(self._ask(DOCUMENTS_PROMPT, files_text, list[DocLabel]))
