@@ -82,3 +82,25 @@ def test_pipeline_sample_has_analysis(tmp_path):
     assert case.analysis.recommendation.action in ("investigate", "query", "not_payable", "approve_part", "approve")
     assert case.analysis.settlement.payable == case.payable
     assert case.current.payable == case.payable
+
+
+def test_risk_band_reasons_name_findings():
+    fs = [_f("a", "low", title="Minor thing"), _f("b", "high", title="Amount in a different font: 18,450.00."),
+          _f("c", "medium", title="Bill items don't add up to the total"), _f("d", "low", title="Fourth"),
+          _f("e", "coverage", title="Room limit")]
+    r = recommend(fs, "high", _settlement(), POLICY, FACTS)
+    assert r.action == "investigate"
+    assert r.reasons == ["High risk: Amount in a different font: 18,450.00; "
+                         "Bill items don't add up to the total; Minor thing"]
+    r = recommend(fs, "review", _settlement(), POLICY, FACTS)
+    assert r.action == "query" and r.reasons[0].startswith("Review-band risk: Amount in a different font")
+
+
+def test_reasons_strip_trailing_punctuation():
+    r = recommend([_f(severity="critical", title="Font edited.")], "low", _settlement(), POLICY, FACTS)
+    assert r.reasons == ["Font edited (critical)"]
+    r = recommend([_f("unreadable_file", title="Scan unreadable.")], "low", _settlement(), POLICY, FACTS)
+    assert r.reasons == ["Scan unreadable: the file could not be read."]
+    whole = Deduction(amount=1000, reason="Waiting period.")
+    r = recommend([], "low", _settlement(payable=0, whole=whole), POLICY, FACTS)
+    assert r.reasons == ["The whole claim is excluded: Waiting period."]

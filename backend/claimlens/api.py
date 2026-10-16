@@ -9,7 +9,8 @@ from pydantic import BaseModel
 
 from claimlens.auth import current_user
 from claimlens.cards import card_label, cards_of, layout_error, stream_of
-from claimlens.models import Card, CardRole, Case, CaseFile, Review, now
+from claimlens.models import Card, CardRole, Case, CaseFile, ClaimFacts, Finding, PolicyFacts, Review, now
+from claimlens.pipeline.outcome import outcome
 from claimlens.pipeline.read import open_document
 
 RUNNING = {"QUEUED", "READING", "CHECKING", "PROVING"}
@@ -195,15 +196,47 @@ def page_image(case_id: str, doc: str, page: int, request: Request, user: str = 
 
 
 class ReviewIn(BaseModel):
-    action: Literal["accept", "dismiss"]
+    action: Literal["accept", "dismiss", "restore"]
     note: str = ""
+
+
+def _recalculate(db, case_id: str, findings: list[Finding]):
+    """Recompute the outcome after a review and store it. Older cases keep their stored payable."""
+    case = db.get_case(case_id)
+    context = case.context or {}
+    facts = ClaimFacts.model_validate(context["claim"]) if context.get("claim") else None
+    policy = PolicyFacts.model_validate(context["policy"]) if context.get("policy") else None
+    o = outcome(policy, facts, findings)
+    if case.analysis is None:
+        db.update_case(case_id, score=o.score, risk=o.risk)
+        return o.model_copy(update={"payable": case.payable})
+    db.update_case(case_id, current=o, score=o.score, risk=o.risk, payable=o.payable)
+    return o
 
 
 @router.post("/cases/{case_id}/findings/{fid}/review")
 def review(case_id: str, fid: str, body: ReviewIn, request: Request, user: str = Depends(current_user)):
     _own_case(request, case_id, user)
-    finding = _deps(request).db.update_finding(
-        case_id, fid, review=Review(action=body.action, note=body.note, by=user))
+    db = _deps(request).db
+    before = next((f for f in db.get_findings(case_id) if f.id == fid), None)
+    if before is None:
+        raise HTTPException(404, "Finding not found")
+    if not db.get_finding_versions(case_id, fid):
+        db.add_finding_version(case_id, fid, before, "analysis", "pipeline", "")
+    new = None if body.action == "restore" else Review(action=body.action, note=body.note, by=user)
+    finding = db.update_finding(case_id, fid, review=new)
     if finding is None:
         raise HTTPException(404, "Finding not found")
-    return finding.model_dump(mode="json")
+    db.add_finding_version(case_id, fid, finding, body.action, user, body.note)
+    result = finding.model_dump(mode="json")
+    try:
+        result["current"] = _recalculate(db, case_id, db.get_findings(case_id)).model_dump(mode="json")
+    except Exception:
+        log.exception("case %s: recalculating after review failed", case_id)
+    return result
+
+
+@router.get("/cases/{case_id}/findings/{fid}/versions")
+def finding_versions(case_id: str, fid: str, request: Request, user: str = Depends(current_user)):
+    _own_case(request, case_id, user)
+    return _deps(request).db.get_finding_versions(case_id, fid)
