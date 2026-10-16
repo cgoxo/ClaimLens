@@ -82,13 +82,14 @@ Fill the JSON schema. For every value give `page` and `quote`, an exact short co
 - `insurer_name`: the insurance company's name as printed.
 - `start_date`: the policy start date, as written.
 - `sum_insured` and `room_rent_limit_per_day`: plain numbers (rupees). For the room limit, quote the sentence
-  that sets the limit.
+  that sets the limit. Fill `room_rent_limit_per_day` only when the policy states a rupee amount per day; when
+  the limit is a percentage, leave it null and use `room_limit.percent_of_si`. Never convert a percentage to rupees.
 - `waiting_periods`: one entry per condition listed under a waiting period, with `months`, the clause number
   and a quote of the sentence that states the waiting rule.
 - Find every rule below. For each rule give `clause` (the clause number), `page` and `quote`: an exact one-line
   copy of the sentence on that page that states the rule.
 - `co_pays`: one entry per co-payment. `percent` is a plain number of percent (`10` for 10%). `applies` is "all",
-  "age_over" (with `age`) or "other" (put the condition in `condition_text`).
+  "age_over" (with `age`, the threshold age in years: "insured above 60" gives `age: 60`) or "other" (put the condition in `condition_text`).
 - `deductible`: `amount` in rupees; `per` is "claim" or "year".
 - `room_limit`: the room rent limit per day. Give `amount` in rupees or `percent_of_si` as a plain number of
   percent (`1` for 1% of the sum insured), never both. `room_type_text` is the room type it names, if any.
@@ -123,13 +124,16 @@ Set `amount_not_payable` in rupees when part of an item is not payable, otherwis
 BILL_STORY_PROMPT = """You check whether each bill line fits the patient's diagnosis and treatment. You get the
 treatment story (the diagnosis, procedures and discharge summary, pages marked "=== claim page N ===") and the
 bill lines as JSON.
+`item` is the bill line's description as printed.
 For each bill line that is not plainly part of the treatment, give a verdict:
 fits, unusual or unrelated.
 - fits: the line belongs to this diagnosis and treatment. You may leave these out.
 - unusual: it could belong, but a doctor would ask about it. Use this only when a doctor would ask.
 - unrelated: it has nothing to do with this diagnosis and treatment.
 Quote the bill line exactly: `bill_page` and `bill_quote`, one line copied as written.
-Quote what you judged it against: `story_page` and `story_quote`, an exact copy from the story.
+For an unrelated or unusual line, `story_quote` quotes the diagnosis or procedure line it was judged against,
+with `story_page`: an exact copy from the story. Never invent a quote. If the story has no diagnosis or
+procedure text, give `fits`.
 Give a short plain `reason`.
 Judge only medical fit, not price. Do not guess: if the story does not say, leave the line out."""
 

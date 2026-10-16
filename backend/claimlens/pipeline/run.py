@@ -114,7 +114,8 @@ def run_pipeline(case_id: str, deps) -> None:
         findings = list(notes)
         for n, check in enumerate(ALL_CHECKS):
             name = check.__name__.removeprefix("check_")
-            label = "Checking coverage with Gemini" if name == "coverage" else f"Checking: {name}"
+            label = {"coverage": "Checking coverage with Gemini",
+                     "bill_story": "Checking the bill against the treatment"}.get(name, f"Checking: {name}")
             if n == 0:  # the context rides on the first check's progress write
                 progress.step("CHECKING", label, total=len(ALL_CHECKS), context=context_of(ctx))
             else:
