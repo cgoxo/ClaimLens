@@ -37,27 +37,31 @@ def plan(n: int, seed: int, formats: list[str], run: str) -> list[tuple]:
     return cases
 
 
-def main(n: int, seed: int, formats: list[str], workers: int) -> Path:
-    run = f"live{int(time.time())}"
+def main(n: int, seed: int, formats: list[str], workers: int, offline: bool = False) -> Path:
+    """`offline`: the AI stand-in that reads the true facts, and no OCR (photos stay unreadable)."""
+    run = f"{'offline' if offline else 'live'}{int(time.time())}"
     folder = OUT / run
     folder.mkdir(parents=True, exist_ok=True)
-    ocr = DocAiOcr(PROJECT, "us", PROCESSOR)
-    targets = [LocalTarget(folder / f"w{w}", ai_factory=lambda: VertexGemini(PROJECT, "global", "gemini-2.5-flash"),
-                           ocr=ocr) for w in range(workers)]
+    ocr = None if offline else DocAiOcr(PROJECT, "us", PROCESSOR)
+    targets = [LocalTarget(folder / f"w{w}", ocr=ocr, ai_factory=None if offline else
+                           lambda: VertexGemini(PROJECT, "global", "gemini-2.5-flash")) for w in range(workers)]
 
     def one(job):
         k, (case_seed, names, fmt, recipe) = job
-        truth = truth_of(recipe, names, fmt, ocr=True)
+        truth = truth_of(recipe, names, fmt, ocr=not offline)
         try:
             res = targets[k % workers].run(recipe, names, fmt, truth)
-            error, found, status, band, payable, secs, cid = (res.error, dict(res.codes), res.status, res.band,
-                                                              res.payable, res.seconds, res.case_id)
+            error, found, status, band, payable, secs, cid, advice = (
+                res.error, dict(res.codes), res.status, res.band, res.payable, res.seconds, res.case_id,
+                res.recommendation)
         except Exception as e:  # one broken case never stops the run
-            error, found, status, band, payable, secs, cid = f"{type(e).__name__}: {e}", {}, None, None, None, 0, None
+            error, found, status, band, payable, secs, cid, advice = (
+                f"{type(e).__name__}: {e}", {}, None, None, None, 0, None, None)
         row = {"seed": case_seed, "forgeries": names, "fmt": fmt, "expected_codes": dict(truth.codes),
                "found_codes": found, "status_expected": truth.status, "status_found": status,
                "band_expected": truth.band, "band_found": band, "payable_expected": truth.payable,
-               "payable_found": payable, "error": error, "seconds": secs, "case_id": cid}
+               "payable_found": payable, "recommendation_expected": truth.recommendation,
+               "recommendation_found": advice, "error": error, "seconds": secs, "case_id": cid}
         logging.info("seed %s %s %s -> %s", case_seed, fmt, names or ["clean"], status)
         return row
 
@@ -76,5 +80,6 @@ if __name__ == "__main__":
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--formats", default="one_pdf,split_files,photos")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--offline", action="store_true", help="use the true-facts AI stand-in instead of Gemini and OCR")
     args = ap.parse_args()
-    print(main(args.n, args.seed, args.formats.split(","), args.workers))
+    print(main(args.n, args.seed, args.formats.split(","), args.workers, args.offline))

@@ -26,6 +26,7 @@ class CaseResult:
     error: str | None
     seconds: float
     case_id: str | None
+    recommendation: str | None = None
 
 
 class LocalTarget:
@@ -61,6 +62,7 @@ class LocalTarget:
         if r.status_code != 200:
             return CaseResult(None, Counter(), None, None, f"submit: {r.text}", 0, case_id)
         case = client.get(f"/api/cases/{case_id}", headers=USER).json()
+        advice = ((case.get("current") or {}).get("recommendation") or {}).get("action")
         return CaseResult(case["status"], Counter(f["code"] for f in case["findings"]), case["risk"],
                           case["payable"], case["error"] if case["status"] == "FAILED" else None,
-                          time.time() - started, case_id)
+                          time.time() - started, case_id, advice)

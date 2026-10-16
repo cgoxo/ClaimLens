@@ -2,6 +2,7 @@
 and the policy. Forgeries that work on the files themselves are applied here."""
 
 import io
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 import pymupdf
@@ -25,7 +26,8 @@ def claim_pages(r: Recipe) -> list[tuple[str, list[str]]]:
         f"Date of claim:     {day(r.claim_day)}"])]
     pages.append(("Discharge Summary", [
         f"Patient name:  {name('Discharge Summary')}", f"Admitted:      {day(r.admission)}",
-        f"Discharged:    {day(r.discharge)}", "", f"Diagnosis:     {r.condition}",
+        f"Discharged:    {day(r.discharge)}", *([f"Patient age:   {r.patient_age} years"] if r.patient_age else []),
+        "", f"Diagnosis:     {r.condition}",
         f"Procedure:     {r.procedure} ({day(r.procedure_day)})", "Condition at discharge: Stable"]))
     items = [f"{d:<38} {money(a)}" for d, a in r.items]
     pages.append((f"Hospital Bill - Invoice {r.invoice}", [
@@ -58,20 +60,69 @@ def _pdf(pages: list[tuple[str, list[str]]], producer: str = "HospitalHMS v4.2")
     return buf.getvalue()
 
 
+@dataclass
+class Clause:
+    """One policy rule as printed: its number, title, the sentence the rule is quoted from, and more lines."""
+
+    kind: str
+    number: str
+    title: str
+    page: int
+    quote: str
+    more: list = field(default_factory=list)
+
+
+def clauses(r: Recipe) -> list[Clause]:
+    """Every rule the recipe's policy carries, one numbered clause each, in plain sentences."""
+    out = []
+    if r.room_limit:
+        out.append(Clause("room_limit", "2.1", "Room rent limit", 1, "Room rent is payable up to 1% of the sum insured per day",
+                          [f"({money(r.room_limit)} per day). If a costlier room is chosen, the excess is not payable."]))
+    if r.icu_limit_pct:
+        out.append(Clause("icu_limit", "2.2", "ICU limit", 1,
+                          f"ICU charges are payable up to {r.icu_limit_pct:g}% of the sum insured per day.",
+                          [f"({money(int(r.sum_insured * r.icu_limit_pct / 100))} per day). The excess is not payable."]))
+    if r.proportionate:
+        out.append(Clause("proportionate", "2.3", "Proportionate deduction", 1,
+                          "Proportionate deduction applies to doctor, nursing, surgery and test charges."))
+    if r.deductible:
+        out.append(Clause("deductible", "5.1", "Deductible", 4,
+                          f"A deductible of {money(r.deductible)} applies to each claim, before any co-pay."))
+    if r.co_pay:
+        out.append(Clause("co_pay", "5.2", "Co-payment", 4,
+                          f"A co-pay of {r.co_pay:g}% applies if the patient is aged over {r.co_pay_age}."
+                          if r.co_pay_age is not None else f"A co-pay of {r.co_pay:g}% applies to every claim."))
+    if r.sub_limit:
+        out.append(Clause("sub_limit", "5.3", "Condition limit", 4,
+                          f"{r.condition} treatment is payable up to {money(r.sub_limit)} per claim."))
+    if r.non_payable_standard:
+        out.append(Clause("non_payable", "5.4", "Items not payable", 4,
+                          "Standard non-payable items (gloves, masks, admission kit, etc.) are not payable."))
+    if r.pre_days is not None:
+        out.append(Clause("window", "5.5", "Cover window", 4,
+                          f"Bills are covered from {r.pre_days} days before admission to {r.post_days} days after discharge."))
+    return out
+
+
 def policy_pdf(r: Recipe) -> bytes:
-    limit = (["## Clause 2.1 - Room rent limit", "Room rent is payable up to 1% of the sum insured per day",
-              f"({money(r.room_limit)} per day). If a costlier room is chosen, the excess is not payable."]
-             if r.room_limit else ["## Clause 2.1 - Room", "Room rent is payable at actuals."])
-    return _pdf([
+    def printed(page: int) -> list[str]:
+        return [x for c in clauses(r) if c.page == page for x in ["", f"## Clause {c.number} - {c.title}", c.quote, *c.more]]
+
+    room = [] if r.room_limit else ["## Clause 2.1 - Room", "Room rent is payable at actuals."]
+    pages = [
         ("Example Health Insurance Co. - Policy Schedule", [
             f"Policy number:        {r.policy_no}", f"Insured person:       {r.patient}",
-            f"Policy start date:    {day(r.start)}", f"Sum insured:          {money(r.sum_insured)}", "", *limit]),
+            f"Policy start date:    {day(r.start)}", f"Sum insured:          {money(r.sum_insured)}",
+            *([""] + room if room else []), *printed(1)]),
         ("Section 3 - Waiting Periods", [
             "## Clause 3.2 - Specific illnesses: 24 months",
             "Treatment of the following is not payable until 24 months of", "continuous cover have been completed:",
             *[f"  - {c}" for c in WAITING_LIST]]),
         ("Section 4 - Exclusions", ["Cosmetic treatment, dental treatment (unless due to accident),",
-                                    "self-inflicted injury."])], producer="ExampleHealth PolicyGen 2.1")
+                                    "self-inflicted injury."])]
+    if printed(4):
+        pages.append(("Section 5 - Cost Sharing and Payable Items", printed(4)[1:]))
+    return _pdf(pages, producer="ExampleHealth PolicyGen 2.1")
 
 
 def cv_pdf() -> bytes:
