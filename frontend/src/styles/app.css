@@ -330,6 +330,7 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
 /* ---------- chat ---------- */
 .dossier-left .tabs { margin: var(--space-4) 0 var(--space-3); }
 .chat { display: grid; gap: var(--space-3); }
+.chat[hidden] { display: none; }
 .chat-head { display: flex; justify-content: flex-end; }
 .chat-previous { font-size: 14px; }
 .chat-previous ul { margin: var(--space-2) 0 0; padding-left: 1.2em; display: grid; gap: var(--space-1); }

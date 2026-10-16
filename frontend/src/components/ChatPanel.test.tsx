@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "../api/client";
 import type { Client } from "../api/client";
@@ -124,8 +124,40 @@ test("New chat starts an empty thread and previous chats are listed", async () =
   expect(client.newChat).toHaveBeenCalledWith("c1");
 });
 
-test("when chat is turned off the panel is not shown", async () => {
-  const { client } = setup(empty, { getChat: vi.fn(async () => { throw new ApiError(404, "Not found"); }) });
+test("a 429 shows the limit text and keeps the typed text", async () => {
+  setup(empty, { ask: vi.fn(async () => { throw new ApiError(429, "Daily limit of 200 chat messages reached"); }) });
+  await userEvent.type(await screen.findByRole("textbox"), "one more");
+  await userEvent.click(screen.getByRole("button", { name: "Send" }));
+  expect(await screen.findByText("Daily limit of 200 chat messages reached")).toBeInTheDocument();
+  expect(screen.getByRole("textbox")).toHaveValue("one more");
+});
+
+test("Enter sends, but not while an IME is composing", async () => {
+  const { client } = setup();
+  const box = await screen.findByRole("textbox");
+  await userEvent.type(box, "hello");
+  fireEvent.keyDown(box, { key: "Enter", isComposing: true });
+  expect(client.ask).not.toHaveBeenCalled();
+  fireEvent.keyDown(box, { key: "Enter" });
+  await waitFor(() => expect(client.ask).toHaveBeenCalledTimes(1));
+});
+
+test("a 409 on Apply refetches the thread so the card shows its real status, with a notice", async () => {
+  const getChat = vi.fn()
+    .mockResolvedValueOnce(withMessages(message({ proposals: [proposal()] })))
+    .mockResolvedValue(withMessages(message({ proposals: [proposal({ status: "applied" })] })));
+  const { onOutcome } = setup(empty, { getChat, decide: vi.fn(async () => { throw new ApiError(409, "Not pending"); }) });
+  await userEvent.click(await screen.findByRole("button", { name: "Apply" }));
+  expect(await screen.findByText("Applied")).toBeInTheDocument();
+  expect(screen.getByText("Already decided")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Apply" })).toBeNull();
+  expect(onOutcome).not.toHaveBeenCalled();
+});
+
+test("when chat is turned off the panel is not shown and the caller is told", async () => {
+  const onUnavailable = vi.fn();
+  const { client } = setup(empty, { getChat: vi.fn(async () => { throw new ApiError(404, "Not found"); }) }, { onUnavailable });
   await waitFor(() => expect(client.getChat).toHaveBeenCalled());
+  await waitFor(() => expect(onUnavailable).toHaveBeenCalled());
   expect(screen.queryByRole("textbox")).toBeNull();
 });

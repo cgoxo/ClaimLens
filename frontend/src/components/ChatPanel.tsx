@@ -14,11 +14,15 @@ interface Props {
   onClearSelection(): void;
   /** to name the finding a proposal is about */
   findings?: Pick<Finding, "id" | "title">[];
+  /** chat is turned off on the server (404): the caller hides the tab */
+  onUnavailable?(): void;
+  /** the panel stays mounted when its tab is not shown, so a draft and a pending answer survive */
+  hidden?: boolean;
 }
 
 const UNAVAILABLE = "Couldn't answer right now, try again";
 
-export default function ChatPanel({ caseId, client, onOpenCitation, onOutcome, pendingSelection, onClearSelection, findings = [] }: Props) {
+export default function ChatPanel({ caseId, client, onOpenCitation, onOutcome, pendingSelection, onClearSelection, findings = [], onUnavailable, hidden = false }: Props) {
   const [state, setState] = useState<Pick<ChatState, "messages" | "previous"> | null>(null);
   const [off, setOff] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -33,7 +37,7 @@ export default function ChatPanel({ caseId, client, onOpenCitation, onOutcome, p
       (s) => { if (live) setState({ messages: s.messages, previous: s.previous }); },
       (e) => {
         if (!live) return;
-        if (e instanceof ApiError && e.status === 404) setOff(true);
+        if (e instanceof ApiError && e.status === 404) { setOff(true); onUnavailable?.(); }
         else setLoadError(e instanceof ApiError ? e.detail : "Couldn't load the chat");
       },
     );
@@ -43,7 +47,8 @@ export default function ChatPanel({ caseId, client, onOpenCitation, onOutcome, p
   useEffect(() => { end.current?.scrollIntoView?.({ block: "end" }); }, [state?.messages.length, waiting]);
 
   if (off) return null;
-  if (loadError) return <p className="chat-error" role="alert">{loadError}</p>;
+  if (hidden && !state) return null;
+  if (loadError) return <p className="chat-error" role="alert" hidden={hidden}>{loadError}</p>;
   if (!state) return <p className="loading">Opening the chat…</p>;
 
   const append = (...added: ChatMessage[]) =>
@@ -84,7 +89,21 @@ export default function ChatPanel({ caseId, client, onOpenCitation, onOutcome, p
   };
 
   const decide = async (pid: string, action: "apply" | "ignore") => {
-    const { proposal, current } = await client.decide(caseId, pid, action);
+    let result;
+    try {
+      result = await client.decide(caseId, pid, action);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        // decided already (another tab, a double click): show the card's real status
+        try {
+          const fresh = await client.getChat(caseId);
+          setState((s) => s && { ...s, messages: fresh.messages });
+        } catch { /* keep what is shown */ }
+        throw new Error("Already decided");
+      }
+      throw e;
+    }
+    const { proposal, current } = result;
     setState((s) => s && {
       ...s,
       messages: s.messages.map((m) => ({ ...m, proposals: m.proposals.map((p) => (p.id === pid ? proposal : p)) })),
@@ -95,7 +114,7 @@ export default function ChatPanel({ caseId, client, onOpenCitation, onOutcome, p
   const titleOf = (id: string | null) => findings.find((f) => f.id === id)?.title ?? "";
 
   return (
-    <section className="chat" aria-label="Chat">
+    <section className="chat" aria-label="Chat" hidden={hidden}>
       <div className="chat-head">
         <button type="button" className="btn btn-quiet" onClick={() => void newChat()} disabled={waiting}>New chat</button>
       </div>
@@ -146,7 +165,7 @@ export default function ChatPanel({ caseId, client, onOpenCitation, onOutcome, p
       <form className="chat-form" onSubmit={(e) => { e.preventDefault(); void send(); }}>
         <textarea value={text} rows={2} maxLength={2000} aria-label="Your question" placeholder="Ask about this claim…"
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
         <button type="submit" className="btn btn-primary" disabled={waiting || !text.trim()}>Send</button>
       </form>
     </section>

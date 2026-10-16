@@ -27,6 +27,8 @@ export default function CasePage() {
   // a context value opened in the viewer; picking a finding clears it
   const [pinned, setPinned] = useState<Citation | null>(null);
   const [leftTab, setLeftTab] = useState<"findings" | "chat">("findings");
+  const [chatOff, setChatOff] = useState(false);
+  const tab = chatOff ? "findings" : leftTab;
   const openFact = (c: Citation) => { setPinned(c); setSelectionKey((k) => k + 1); };
 
   useEffect(() => () => client.releaseImages(), [client]);
@@ -184,15 +186,15 @@ export default function CasePage() {
           )}
           {context}
           <div className="tabs" role="tablist" aria-label="Findings and chat">
-            {(["findings", "chat"] as const).map((t) => (
-              <button key={t} type="button" role="tab" className="tab" aria-selected={leftTab === t}
+            {(chatOff ? ["findings"] as const : ["findings", "chat"] as const).map((t) => (
+              <button key={t} type="button" role="tab" className="tab" aria-selected={tab === t}
                 onClick={() => setLeftTab(t)}>{t === "findings" ? "Findings" : "Chat"}</button>
             ))}
           </div>
-          {leftTab === "chat" ? (
-            <ChatPanel caseId={data.id} client={client} findings={findings} onOpenCitation={openFact}
-              onOutcome={(c) => void applied(c)} pendingSelection={null} onClearSelection={() => {}} />
-          ) : (
+          <ChatPanel caseId={data.id} client={client} findings={findings} onOpenCitation={openFact}
+            onOutcome={(c) => void applied(c)} pendingSelection={null} onClearSelection={() => {}}
+            hidden={tab !== "chat"} onUnavailable={() => setChatOff(true)} />
+          {tab === "findings" && (
             <>
               <p className="hint muted">Select a finding to see it on the page. <kbd>j</kbd> / <kbd>k</kbd> to move.</p>
               <FindingList findings={findings} selectedId={selectedId} onSelect={(f) => { setPinned(null); setSelectedId(f.id); setSelectionKey((k) => k + 1); }} onReview={review} />
