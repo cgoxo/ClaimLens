@@ -61,21 +61,22 @@ def _correct_fact(deps, case: Case, p: Proposal, message_id: str, by: str) -> Ou
     old = deps.db.get_findings(case.id)
     merged: list[Finding] = []
     versions: list[tuple[Finding, str]] = []  # (finding as saved, action)
-    first_versions: list[Finding] = []  # version 1 "analysis" for old findings that have none yet
+    needs_first: list[Finding] = []  # old findings with no version 1 yet
     for f in old:
         if not is_owned(f):
             merged.append(f)
-        elif f.id in new:
+            continue
+        if f.id in new:
             updated = new[f.id].model_copy(update={"review": f.review})
-            merged.append(updated)
-            versions.append((updated, "rechecked"))
-            first_versions.append(f)
+            action = "restored_by_correction" if f.removed else "rechecked" if updated != f else None
         else:
-            gone = f.model_copy(update={"removed": True})
-            merged.append(gone)
-            if not f.removed:
-                versions.append((gone, "removed_by_correction"))
-                first_versions.append(f)
+            updated = f if f.removed else f.model_copy(update={"removed": True})
+            action = None if f.removed else "removed_by_correction"
+        merged.append(updated)
+        if action:
+            versions.append((updated, action))
+            if not deps.db.get_finding_versions(case.id, f.id):
+                needs_first.append(f)
     seen = {f.id for f in old}
     added = [f for fid, f in new.items() if fid not in seen]
     merged += added
@@ -85,15 +86,17 @@ def _correct_fact(deps, case: Case, p: Proposal, message_id: str, by: str) -> Ou
              "reason": p.reason, "evidence": p.evidence.model_dump(mode="json") if p.evidence else None,
              "message_id": message_id}
 
+    # Everything is computed. The writes below are not one transaction; the case goes first so a failure
+    # part-way never leaves new findings beside the old facts.
     db = deps.db
+    db.update_case(case.id, context=context, corrections=[*case.corrections, entry], **fields)
     db.put_findings(case.id, merged)
-    for f in first_versions:
-        ensure_first_version(deps, case.id, f)
+    for f in needs_first:
+        db.add_finding_version(case.id, f.id, f, "analysis", "pipeline", "")
     for f, action in versions:
         db.add_finding_version(case.id, f.id, f, action, by, p.reason)
     for f in added:
         db.add_finding_version(case.id, f.id, f, "added_by_correction", by, p.reason)
-    db.update_case(case.id, context=context, corrections=[*case.corrections, entry], **fields)
     return outcome
 
 

@@ -178,3 +178,79 @@ def test_removed_finding_not_counted_and_hidden(settings):
     assert after.payable > before["current"]["payable"]  # the waiting period no longer rules the claim out
     shown = client.get(f"/api/cases/{cid}", headers=A).json()["findings"]
     assert fid not in [f["id"] for f in shown] and len(shown) == len(before["findings"]) - 1
+
+
+def _correct_total(deps, case):
+    return _apply(deps, case, type="correct_fact", path="claim.bills[0].total", value=_line_total(case),
+                  evidence=EVIDENCE)
+
+
+def test_unchanged_finding_gets_no_version_so_pending_proposal_not_stale(tmp_path):
+    deps, case = _setup(tmp_path)
+    fid = _by_code(deps, "name_mismatch").id
+    pending = _proposal(deps, case, type="review_finding", finding_id=fid, action="dismiss")
+    assert _correct_total(deps, case)[0].status == "applied"
+    assert deps.db.get_finding_versions("c1", fid) == []
+    done, _ = apply(deps, deps.db.get_case("c1"), pending, "m2", BY)
+    assert done.status == "applied"
+
+
+def test_removed_finding_cannot_be_reviewed(tmp_path, settings):
+    deps, case = _setup(tmp_path)
+    _correct_total(deps, case)
+    fid = _by_code(deps, "sum_mismatch").id
+    for action in ("dismiss", "restore"):
+        p, current = _apply(deps, case, type="review_finding", finding_id=fid, action=action)
+        assert p.status == "failed" and p.error == "Finding was removed by a correction" and current is None
+    client = _client(settings)
+    cid = _upload(client).json()["case_id"]
+    client.app.state.deps.db.update_finding(cid, "waiting_period-policy-2-1", removed=True)
+    r = client.post(f"/api/cases/{cid}/findings/waiting_period-policy-2-1/review", json={"action": "dismiss"},
+                    headers=A)
+    assert r.status_code == 409
+
+
+def test_removed_finding_produced_again_is_restored(tmp_path):
+    deps, case = _setup(tmp_path)
+    _correct_total(deps, case)
+    fid = _by_code(deps, "sum_mismatch").id
+    assert _by_code(deps, "sum_mismatch").removed
+    _apply(deps, case, type="correct_fact", path="claim.bills[0].total", value=1.0, evidence=EVIDENCE)
+    assert not _by_code(deps, "sum_mismatch").removed
+    assert [v["action"] for v in deps.db.get_finding_versions("c1", fid)] == [
+        "analysis", "removed_by_correction", "restored_by_correction"]
+
+
+def test_dismissed_finding_stays_dismissed_and_others_untouched(tmp_path):
+    from claimlens.models import Finding
+
+    deps, case = _setup(tmp_path)
+    mismatch = _by_code(deps, "sum_mismatch")
+    record_review(deps, case, mismatch.id, "dismiss", "", BY)
+    note = Finding(id="reviewer_note-1", check="reviewer", code="reviewer_note", severity="low", title="n")
+    gem = Finding(id="not_covered-1", check="coverage", code="not_covered", severity="coverage", title="g")
+    deps.db.put_findings("c1", [*deps.db.get_findings("c1"), note, gem])
+    _apply(deps, case, type="correct_fact", path="claim.bills[0].total", value=1.0, evidence=EVIDENCE)
+    after = {f.id: f for f in deps.db.get_findings("c1")}
+    assert after[mismatch.id].review.action == "dismiss" and not after[mismatch.id].removed
+    assert after["reviewer_note-1"] == note and after["not_covered-1"] == gem
+
+
+def test_unparseable_correction_fails_writing_nothing(tmp_path):
+    deps, case = _setup(tmp_path)
+    findings, saved = deps.db.get_findings("c1"), deps.db.get_case("c1")
+    p, current = _apply(deps, case, type="correct_fact", path="claim.amount_claimed", value="lots",
+                        evidence=EVIDENCE)
+    assert p.status == "failed" and p.error and current is None
+    assert deps.db.get_findings("c1") == findings
+    assert deps.db.get_case("c1").context == saved.context and deps.db.get_case("c1").corrections == []
+
+
+def test_stale_set_severity_refused(tmp_path):
+    deps, case = _setup(tmp_path)
+    fid = _by_code(deps, "name_mismatch").id
+    p = _proposal(deps, case, type="set_severity", finding_id=fid, severity="critical")
+    record_review(deps, case, fid, "accept", "", BY)
+    stale, current = apply(deps, deps.db.get_case("c1"), p, "m1", BY)
+    assert stale.status == "stale" and current is None
+    assert _by_code(deps, "name_mismatch").severity == "low"

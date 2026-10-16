@@ -50,6 +50,8 @@ def record_review(deps, case: Case, fid: str, action: str, note: str, by: str) -
     before = next((f for f in db.get_findings(case.id) if f.id == fid), None)
     if before is None:
         raise LookupError(fid)
+    if before.removed:
+        raise ReviewConflict("Finding was removed by a correction")
     if action == "restore" and not (before.review and before.review.action == "dismiss"):
         raise ReviewConflict("Only a dismissed finding can be restored")
     ensure_first_version(deps, case.id, before)
