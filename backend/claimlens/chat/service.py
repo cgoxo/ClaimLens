@@ -32,7 +32,8 @@ def get_or_create_thread(deps, case: Case, by: str) -> ChatThread:
 def ask(deps, case: Case, text: str, selection: Box | None, by: str) -> ChatMessage:
     """Answer first; store the question and the answer only if the answer worked."""
     thread = get_or_create_thread(deps, case, by)
-    history = deps.db.get_messages(case.id, thread.id)[-deps.settings.chat_history:]
+    keep = deps.settings.chat_history
+    history = deps.db.get_messages(case.id, thread.id)[-keep:] if keep > 0 else []
     question = ChatMessage(id=_id(), role="reviewer", text=text, selection=selection, by=by)
     try:
         reply = answer(deps, case, thread, history, question)
@@ -69,7 +70,7 @@ def decide(deps, case: Case, proposal_id: str, decision: Literal["apply", "ignor
     if found is None:
         raise LookupError(f"Proposal {proposal_id} not found")
     message, proposal = found
-    if proposal.status != "pending":
+    if proposal.status != "pending" or not deps.db.claim_proposal(case.id, thread.id, message.id, proposal.id):
         raise NotPending(f"Proposal is {proposal.status}")
     if decision == "ignore":
         proposal = proposal.model_copy(update={"status": "ignored", "decided_by": by, "decided_at": now()})

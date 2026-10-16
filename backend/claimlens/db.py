@@ -57,6 +57,7 @@ class Db(Protocol):
     def add_message(self, case_id: str, thread_id: str, msg: ChatMessage) -> None: ...
     def get_messages(self, case_id: str, thread_id: str) -> list[ChatMessage]: ...
     def update_proposal(self, case_id: str, thread_id: str, message_id: str, proposal: Proposal) -> None: ...
+    def claim_proposal(self, case_id: str, thread_id: str, message_id: str, proposal_id: str) -> bool: ...
     def count_messages_since(self, owner: str, since: datetime) -> int: ...
 
 
@@ -217,6 +218,18 @@ class LocalDb:
                     m["proposals"] = [proposal.model_dump(mode="json") if p["id"] == proposal.id else p
                                       for p in m["proposals"]]
             self._write("chats", case_id, chats)
+
+    def claim_proposal(self, case_id: str, thread_id: str, message_id: str, proposal_id: str) -> bool:
+        with self._lock:
+            chats = self._read("chats", case_id) or {}
+            for m in chats.get(thread_id, {}).get("messages", []):
+                if m["id"] == message_id:
+                    for p in m["proposals"]:
+                        if p["id"] == proposal_id and p["status"] == "pending":
+                            p["status"] = "applying"
+                            self._write("chats", case_id, chats)
+                            return True
+            return False
 
     def count_messages_since(self, owner: str, since: datetime) -> int:
         folder = self.root / "chats"
@@ -405,6 +418,23 @@ class FirestoreDb:
             transaction.update(ref, {"proposals": [p.model_dump(mode="json") for p in proposals]})
 
         update(self.client.transaction())
+
+    def claim_proposal(self, case_id: str, thread_id: str, message_id: str, proposal_id: str) -> bool:
+        from google.cloud import firestore
+
+        ref = self._chats(case_id).document(thread_id).collection("messages").document(message_id)
+
+        @firestore.transactional
+        def claim(transaction) -> bool:
+            msg = ChatMessage.model_validate(ref.get(transaction=transaction).to_dict())
+            if not any(p.id == proposal_id and p.status == "pending" for p in msg.proposals):
+                return False
+            proposals = [p.model_copy(update={"status": "applying"}) if p.id == proposal_id else p
+                         for p in msg.proposals]
+            transaction.update(ref, {"proposals": [p.model_dump(mode="json") for p in proposals]})
+            return True
+
+        return claim(self.client.transaction())
 
     def count_messages_since(self, owner: str, since: datetime) -> int:
         # collection-group query over every case's messages; needs a composite index on (by, role, created_at)

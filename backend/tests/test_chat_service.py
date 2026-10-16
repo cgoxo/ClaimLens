@@ -99,3 +99,56 @@ def test_second_decision_not_pending(tmp_path):
         with pytest.raises(NotPending):
             decide(deps, deps.db.get_case("c1"), pid, decision, BY)
     assert len(deps.db.get_finding_versions("c1", proposal.finding_id)) == versions
+
+
+def test_claim_proposal_twice_second_false(tmp_path):
+    deps, case = _setup(tmp_path)
+    deps.chat_ai.script = [_final([_dismiss_proposal(deps)])]
+    reply = ask(deps, case, "Dismiss?", None, BY)
+    tid = deps.db.active_thread("c1").id
+    assert deps.db.claim_proposal("c1", tid, reply.id, reply.proposals[0].id) is True
+    assert deps.db.claim_proposal("c1", tid, reply.id, reply.proposals[0].id) is False
+    assert deps.db.get_messages("c1", tid)[-1].proposals[0].status == "applying"
+
+
+def test_concurrent_apply_applies_once(tmp_path):
+    import threading
+
+    deps, case = _setup(tmp_path)
+    deps.chat_ai.script = [_final([_dismiss_proposal(deps)])]
+    reply = ask(deps, case, "Dismiss?", None, BY)
+    fid = reply.proposals[0].finding_id
+    before = len(deps.db.get_finding_versions("c1", fid))
+    results, barrier = [], threading.Barrier(2)
+
+    def go():
+        barrier.wait()
+        try:
+            results.append(decide(deps, case, reply.proposals[0].id, "apply", BY)[0].status)
+        except NotPending:
+            results.append("not_pending")
+
+    threads = [threading.Thread(target=go) for _ in range(2)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert sorted(results) == ["applied", "not_pending"]
+    assert len(deps.db.get_finding_versions("c1", fid)) - before <= 2  # one dismissal (+ its first version)
+    assert [v["action"] for v in deps.db.get_finding_versions("c1", fid)].count("dismiss") == 1
+
+
+@pytest.mark.parametrize("keep,expected", [(2, ["b-q", "b-a"]), (0, [])])
+def test_history_capped_and_excludes_question(tmp_path, monkeypatch, keep, expected):
+    from claimlens.chat import service
+
+    deps, case = _setup(tmp_path, [_final(), _final(), _final()])
+    deps.settings.chat_history = keep
+    seen = []
+    real = service.answer
+    monkeypatch.setattr(service, "answer", lambda d, c, t, history, q: (seen.append((history, q)), real(d, c, t, history, q))[1])
+    ask(deps, case, "a-q", None, BY)
+    ask(deps, case, "b-q", None, BY)
+    ask(deps, case, "c-q", None, BY)
+    history, question = seen[-1]
+    assert question.text == "c-q" and all(m.id != question.id for m in history)
+    assert [m.text for m in history][:1] == (["b-q"] if keep else [])
+    assert len(history) == keep

@@ -389,7 +389,7 @@ class Box(BaseModel):
 
 
 ProposalType = Literal["review_finding", "set_severity", "add_finding", "correct_fact"]
-ProposalStatus = Literal["pending", "applied", "ignored", "stale", "failed"]
+ProposalStatus = Literal["pending", "applying", "applied", "ignored", "stale", "failed"]
 
 
 class Proposal(BaseModel):
