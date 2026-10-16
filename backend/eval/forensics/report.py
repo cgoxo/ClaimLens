@@ -14,8 +14,6 @@ DOCS = Path(__file__).resolve().parents[3] / "docs" / "eval"
 FORGERIES = ("G", "G2", "G3", "P", "C")
 USD_INR = 84
 # per-second rates from the Cloud Billing catalogue (Cloud Run, instance-based)
-RATE_CPU_JOB = 4 * 0.000018 + 8 * 0.000002  # asia-south1, 4 vCPU 8 GiB
-RATE_GPU_JOB = 0.00022404 + 4 * 0.0000216 + 16 * 0.0000024  # asia-southeast1, L4 + 4 vCPU 16 GiB
 RATE_API = 0.000018 + 1 * 0.000002  # the existing service's own CPU, per vCPU-second
 
 
@@ -50,8 +48,7 @@ def render(rows: list[dict], date: str | None = None) -> str:
         worst = max((v for v in best["fpr_by_control"].values() if v is not None), default=None)
         seconds = [r["seconds"] for r in rows if r["detector"] == d and r.get("seconds") is not None]
         median = statistics.median(seconds) if seconds else None
-        rate = RATE_GPU_JOB if d == "catnet" else RATE_API
-        cost = f"₹{median * rate * USD_INR * 10:.2f}" if median is not None else "–"  # ~10 photo pages per case
+        cost = f"₹{median * RATE_API * USD_INR * 10:.2f}" if median is not None else "–"  # ~10 photo pages per case
         verdict = "KEEP" if keep(best) else "DROP"
         lines.append(f"| {d} | {_fmt(g['auc'])} | {_fmt(g2['auc'])} | {_fmt(g['tpr_at_5fpr'], True)} | "
                      f"{_fmt(worst, True)} | {g['n_no_opinion']} | {cost} | **{verdict}** |")
@@ -70,14 +67,12 @@ def render(rows: list[dict], date: str | None = None) -> str:
               "## Known limits", "",
               "- A page that is entirely AI-generated, or a forgery re-photographed from a screen, leaves no "
               "local trace to find.",
-              "- PNG uploads carry no JPEG history: ela, dq and catnet have no opinion on them.",
+              "- PNG uploads carry no JPEG history: ela and dq have no opinion on them.",
               "- Copy-move only judges near-lossless images (PNG, or JPEG q ≥ 93).",
               "- The set is our own fictional bills: real phone photos vary more (lighting, angle, paper).", "",
               "## Cost basis", "",
               f"- ₹/case assumes 10 photographed pages per case at ₹{USD_INR}/$.",
-              f"- catnet: L4 GPU job in asia-southeast1, ${RATE_GPU_JOB:.7f}/s (or a CPU job in asia-south1, "
-              f"${RATE_CPU_JOB:.7f}/s).",
-              f"- Every other detector runs in the existing service, ${RATE_API:.7f}/vCPU-s.",
+              f"- Every detector runs in the existing service, ${RATE_API:.7f}/vCPU-s.",
               "- gemini_closeup also costs about ₹0.3 per case in Gemini tokens."]
     return "\n".join(lines) + "\n"
 
