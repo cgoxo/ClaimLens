@@ -11,6 +11,10 @@ from claimlens.pipeline.prove import prove
 RECHECKED = {"story", "duplicate"} | CODE_COVERAGE_CODES
 
 
+def is_owned(finding: Finding) -> bool:
+    return finding.check in RECHECKED or finding.code in RECHECKED
+
+
 def recheck(ctx: Ctx) -> list[Finding]:
     """Story, duplicate and the code-only coverage findings from the current facts. Never calls the AI."""
     ctx.skip_pages = {("claim", later.page) for _, later in duplicate_pages(ctx.read)}
