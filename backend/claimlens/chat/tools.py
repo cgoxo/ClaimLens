@@ -2,6 +2,7 @@
 import io
 import json
 import logging
+import math
 from dataclasses import dataclass
 
 from PIL import Image
@@ -97,7 +98,8 @@ def _error(msg: str) -> ToolResult:
 
 
 def _cut(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[:limit] + " [truncated]"
+    suffix = " [truncated]"
+    return text if len(text) <= limit else text[:max(0, limit - len(suffix))] + suffix
 
 
 def _page(ctx: Ctx, doc, page) -> PageInfo:
@@ -111,6 +113,8 @@ def _bbox(raw) -> tuple[float, float, float, float]:
     if not isinstance(raw, (list, tuple)) or len(raw) != 4:
         raise ValueError("bbox must be [x0, y0, x1, y1]")
     x0, y0, x1, y1 = (float(v) for v in raw)
+    if not all(math.isfinite(v) for v in (x0, y0, x1, y1)):
+        raise ValueError("bbox values must be finite numbers")
     if not x1 > x0 or not y1 > y0:
         raise ValueError("bbox has no area")
     return x0, y0, x1, y1
@@ -158,6 +162,8 @@ def _get_finding(args, deps, case, ctx) -> dict:
     f = next((f for f in deps.db.get_findings(case.id) if f.id == fid), None)
     if f is None:
         raise ValueError("no such finding")
+    if f.removed:
+        raise ValueError("that finding was removed by a correction")
     return {"finding": f.model_dump(mode="json"), "status": _status(f),
             "versions": deps.db.get_finding_versions(case.id, fid)}
 
@@ -204,6 +210,10 @@ def _check_region(args, deps, case, ctx) -> dict:
     if p.kind not in PHOTO_KINDS:
         return {"error": "only for photo or scanned pages"}
     box = _bbox(args["bbox"])
+    overlap = (max(box[0], 0), max(box[1], 0), min(box[2], p.width), min(box[3], p.height))
+    if overlap[2] <= overlap[0] or overlap[3] <= overlap[1] or \
+            (overlap[2] - overlap[0]) * (overlap[3] - overlap[1]) < 0.5 * (box[2] - box[0]) * (box[3] - box[1]):
+        raise ValueError("bbox is outside the page")
     key = _original_key(ctx, p) if p.kind == "image" else None
     img, info = load_image(deps.storage.get(key or p.png_key))
     if img is None:

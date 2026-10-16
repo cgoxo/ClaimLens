@@ -30,7 +30,7 @@ def test_get_page_truncates_long_text(tmp_path, monkeypatch):
     monkeypatch.setattr(deps.settings, "chat_tool_chars", 50)
     out = run_tool("get_page", {"doc": page.doc, "page": page.page}, deps, case, ctx)
     assert out.text.endswith("[truncated]")
-    assert len(out.text) <= 50 + len(" [truncated]")
+    assert len(out.text) <= 50
 
 
 def test_list_findings_hides_removed(tmp_path):
@@ -77,3 +77,47 @@ def test_declarations_are_plain_dicts():
     assert names == ["search_text", "get_page", "list_findings", "get_finding", "get_facts", "get_settlement",
                      "view_region", "check_region", "final_answer"]
     json.dumps(TOOLS)
+
+
+def _as_photo(deps, case, ctx, monkeypatch):
+    import numpy as np
+    from claimlens.chat import tools
+    from claimlens.pipeline.forensics.image import ImageInfo
+    page = ctx.read.pages[0]
+    page.kind = "image"
+    img = np.zeros((800, 600, 3), dtype=np.uint8)
+    info = ImageInfo(format="jpeg", jpeg_quality=80, qtables=None, oriented=False,
+                     original_size=(600, 800), size=(600, 800), scale=1.0)
+    monkeypatch.setattr(tools, "load_image", lambda data: (img, info))
+    monkeypatch.setattr(tools, "safe_heatmap",
+                        lambda det, im, inf, words: np.full(im.shape[:2], 0.25, dtype=np.float32) if det is tools.ELA else None)
+    return page
+
+
+def test_check_region_scores_photo_page(tmp_path, monkeypatch):
+    deps, case, ctx = _setup(tmp_path)
+    page = _as_photo(deps, case, ctx, monkeypatch)
+    out = json.loads(run_tool("check_region", {"doc": page.doc, "page": page.page, "bbox": [50, 50, 200, 100]},
+                              deps, case, ctx).text)
+    assert out == {"ela": 0.25, "chars": None, "note": "signal, not proof"}
+
+
+def test_check_region_refuses_box_off_the_page(tmp_path, monkeypatch):
+    deps, case, ctx = _setup(tmp_path)
+    page = _as_photo(deps, case, ctx, monkeypatch)
+    for box in ([5000, 5000, 5100, 5100], [page.width - 10, 50, page.width + 500, 100]):
+        out = json.loads(run_tool("check_region", {"doc": page.doc, "page": page.page, "bbox": box},
+                                  deps, case, ctx).text)
+        assert out == {"error": "bbox is outside the page"}
+
+
+def test_bad_boxes_and_removed_finding_are_errors(tmp_path):
+    deps, case, ctx = _setup(tmp_path)
+    page = ctx.read.pages[0]
+    for box in ([0, 0, float("nan"), 10], [0, 0, float("inf"), 10]):
+        out = json.loads(run_tool("view_region", {"doc": page.doc, "page": page.page, "bbox": box}, deps, case, ctx).text)
+        assert "finite" in out["error"]
+    fid = deps.db.get_findings("c1")[0].id
+    deps.db.update_finding("c1", fid, removed=True)
+    out = json.loads(run_tool("get_finding", {"finding_id": fid}, deps, case, ctx).text)
+    assert out == {"error": "that finding was removed by a correction"}
