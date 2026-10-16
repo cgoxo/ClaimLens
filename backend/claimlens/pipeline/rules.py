@@ -1,4 +1,6 @@
 """Arithmetic on policy rules: limits in rupees, the standard non-payable list, stay length."""
+import re
+
 from rapidfuzz import fuzz
 
 from claimlens.models import Citation, ClaimFacts, Fact, Limit, PolicyFacts, Rule
@@ -57,6 +59,11 @@ def icu_limit_rupees(p: PolicyFacts | None) -> tuple[float | None, Citation | No
     return (v, rule_citation(p.icu_limit)) if v is not None else (None, None)
 
 
+def _same_word(need: str, word: str) -> bool:
+    # short words must match exactly: "ask" is not "mask"
+    return need == word or (len(need) > 4 and fuzz.ratio(need, word) >= 85)
+
+
 def is_non_payable(desc: str, p: PolicyFacts | None) -> Citation | None:
     if p is None or p.non_payable is None or not desc:
         return None
@@ -64,9 +71,10 @@ def is_non_payable(desc: str, p: PolicyFacts | None) -> Citation | None:
     names = list(rule.items)
     if rule.standard_list:
         names += STANDARD_NON_PAYABLE
-    text = desc.lower()
+    words = re.findall(r"[a-z0-9]+", desc.lower())
     for name in names:
-        if name and fuzz.partial_ratio(name.lower(), text) >= 85:
+        need = re.findall(r"[a-z0-9]+", name.lower())
+        if need and all(any(_same_word(n, w) for w in words) for n in need):
             return rule_citation(rule)
     return None
 
