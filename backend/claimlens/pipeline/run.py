@@ -17,6 +17,7 @@ from claimlens.models import now
 from claimlens.pipeline.read import ReadResult, open_document, read_document
 from claimlens.pipeline.outcome import outcome, outcome_text
 from claimlens.pipeline.report import sort_findings, summarise
+from claimlens.pipeline.saved import save_read
 from claimlens.pipeline.text import months_between
 
 log = logging.getLogger(__name__)
@@ -101,6 +102,10 @@ def run_pipeline(case_id: str, deps) -> None:
             next_page[stream] += len(part.pages)
             read.extend(part)
         db.put_pages(case_id, read.pages)
+        try:
+            save_read(deps.storage, case_id, read)  # chat reads this later; a failure here never fails the case
+        except Exception:
+            clog.exception("could not save the read result")
         ctx = Ctx(case_id=case_id, read=read, deps=deps, cards=cards if tagged else [])
         ctx.skip_pages = {("claim", later.page) for _, later in duplicate_pages(read)}  # never count a page twice
 
