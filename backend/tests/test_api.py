@@ -157,6 +157,7 @@ def test_dismiss_lowers_score_and_restore_brings_it_back(client):
     cid = _upload(client).json()["case_id"]
     case = client.get(f"/api/cases/{cid}", headers=A).json()
     criticals = [f["id"] for f in case["findings"] if f["severity"] == "critical"]
+    assert criticals
     before = case["current"]["score"]  # capped at 100, so dismiss every critical to see it drop
     for fid in criticals:
         r = _review(client, cid, fid, "dismiss")
@@ -171,13 +172,17 @@ def test_dismiss_room_rent_restores_payable(client):
     cid = _upload(client).json()["case_id"]
     case = client.get(f"/api/cases/{cid}", headers=A).json()
     by_code = {f["code"]: f["id"] for f in case["findings"]}
+    excess = next(f for f in case["findings"] if f["code"] == "room_rent_limit")["amount_not_payable"]
     start = case["payable"]  # the sample is inside a waiting period, so nothing is payable
-    _review(client, cid, by_code["waiting_period"], "dismiss")
-    r = _review(client, cid, by_code["room_rent_limit"], "dismiss").json()
-    assert r["current"]["payable"] > start
-    assert client.get(f"/api/cases/{cid}", headers=A).json()["payable"] == r["current"]["payable"]
-    _review(client, cid, by_code["waiting_period"], "restore")
-    assert _review(client, cid, by_code["room_rent_limit"], "restore").json()["current"]["payable"] == start
+
+    def payable(fid, action):
+        return _review(client, cid, fid, action).json()["current"]["payable"]
+
+    mid = payable(by_code["waiting_period"], "dismiss")
+    assert mid > start
+    assert payable(by_code["room_rent_limit"], "dismiss") == pytest.approx(mid + excess)
+    assert payable(by_code["room_rent_limit"], "restore") == pytest.approx(mid)
+    assert payable(by_code["waiting_period"], "restore") == start
 
 
 def test_versions_listed(client):
@@ -203,6 +208,9 @@ def test_old_case_review_keeps_payable(settings):
     assert r.status_code == 200
     case = deps.db.get_case("old")
     assert case.payable == 123 and case.score == 0 and case.risk == "low"
+    assert case.current.payable == 123 and case.current.score == 0
+    assert case.current.recommendation is None and case.current.settlement is None
+    assert r.json()["current"]["recommendation"] is None and r.json()["current"]["payable"] == 123
 
 
 def test_other_user_cannot_list_versions(client):

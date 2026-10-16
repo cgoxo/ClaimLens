@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from claimlens.auth import current_user
 from claimlens.cards import card_label, cards_of, layout_error, stream_of
-from claimlens.models import Card, CardRole, Case, CaseFile, ClaimFacts, Finding, PolicyFacts, Review, now
+from claimlens.models import Card, CardRole, Case, CaseFile, ClaimFacts, Finding, Outcome, PolicyFacts, Review, now
 from claimlens.pipeline.outcome import outcome
 from claimlens.pipeline.read import open_document
 
@@ -207,9 +207,10 @@ def _recalculate(db, case_id: str, findings: list[Finding]):
     facts = ClaimFacts.model_validate(context["claim"]) if context.get("claim") else None
     policy = PolicyFacts.model_validate(context["policy"]) if context.get("policy") else None
     o = outcome(policy, facts, findings)
-    if case.analysis is None:
-        db.update_case(case_id, score=o.score, risk=o.risk)
-        return o.model_copy(update={"payable": case.payable})
+    if case.analysis is None:  # analysed before the rulebook: no settlement to recompute, keep the stored payable
+        o = Outcome(score=o.score, risk=o.risk, payable=case.payable)
+        db.update_case(case_id, current=o, score=o.score, risk=o.risk)
+        return o
     db.update_case(case_id, current=o, score=o.score, risk=o.risk, payable=o.payable)
     return o
 
