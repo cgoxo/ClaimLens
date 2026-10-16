@@ -45,6 +45,12 @@ test("policy numbers are marked when they disagree", () => {
   for (const value of screen.getAllByText("EH-2025-778812")) expect(value.closest("div")).toHaveClass("is-warning");
 });
 
+test("a fact corrected by the reviewer carries a badge", () => {
+  const claim = { ...context.claim!, hospital_name: { ...(context.claim!.hospital_name as object), source: "reviewer" } };
+  setup({ ...context, claim });
+  expect(screen.getAllByText("corrected by reviewer")).toHaveLength(1);
+});
+
 test("a one-day stay reads as 1 day", () => {
   const claim = context.claim as Record<string, { value: string }>;
   setup({ ...context, claim: { ...context.claim, discharge_date: { ...claim.discharge_date, value: "11-Mar-2026" } } });

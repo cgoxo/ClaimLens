@@ -4,6 +4,7 @@ import { ApiError } from "../api/client";
 import type { Case } from "../api/types";
 import { toPercentBox } from "../lib/highlight";
 import { renderPage } from "../test/auth";
+import { message, proposal } from "../test/chat";
 import { outcome } from "../test/outcome";
 import { sampleCase } from "../test/sampleCase";
 import CasePage from "./CasePage";
@@ -24,6 +25,40 @@ function setup(overrides: Record<string, unknown> = {}, data: Case = sampleCase)
 }
 
 const card = (title: RegExp) => screen.getByRole("button", { name: title }).closest("article")!;
+
+describe("chat", () => {
+  const thread = { id: "t", status: "active" as const, carried_summary: "", summary: "", created_by: "a", created_at: "x" };
+  const empty = { getChat: vi.fn(async () => ({ thread: null, messages: [], previous: [] })) };
+
+  test("has a Chat tab next to Findings, and the findings tab is the default", async () => {
+    setup(empty);
+    await screen.findAllByRole("article");
+    expect(screen.getByRole("tab", { name: "Findings" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    expect(await screen.findByRole("textbox")).toBeInTheDocument();
+    expect(screen.queryAllByRole("article")).toHaveLength(0);
+  });
+
+  test("hides removed findings", async () => {
+    const removed = { ...sampleCase.findings[0], id: "gone", title: "Removed by a correction", removed: true };
+    setup(empty, { ...sampleCase, findings: [...sampleCase.findings, removed] });
+    await screen.findAllByRole("article");
+    expect(screen.getAllByRole("article")).toHaveLength(9);
+    expect(screen.queryByText("Removed by a correction")).toBeNull();
+  });
+
+  test("an applied proposal refetches the case once, even without a current outcome", async () => {
+    const getCase = vi.fn(async () => sampleCase);
+    const getChat = vi.fn(async () => ({ thread, messages: [message({ proposals: [proposal()] })], previous: [] }));
+    const decide = vi.fn(async () => ({ proposal: proposal({ status: "applied" }), current: null }));
+    setup({ getCase, getChat, decide });
+    await userEvent.click(await screen.findByRole("tab", { name: "Chat" }));
+    const apply = await screen.findByRole("button", { name: "Apply" });
+    const before = getCase.mock.calls.length;
+    await userEvent.click(apply);
+    await waitFor(() => expect(getCase.mock.calls.length).toBe(before + 1));
+  });
+});
 
 test("shows the stamp, payable and grouped findings", async () => {
   setup();

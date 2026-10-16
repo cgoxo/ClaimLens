@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Citation, Finding } from "../api/types";
+import type { Citation, Finding, Outcome } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import AppHeader from "../components/AppHeader";
 import CaseContext from "../components/CaseContext";
@@ -8,6 +8,7 @@ import FindingList from "../components/FindingList";
 import PageViewer from "../components/PageViewer";
 import Progress from "../components/Progress";
 import Recommendation from "../components/Recommendation";
+import ChatPanel from "../components/ChatPanel";
 import RulebookPanel from "../components/RulebookPanel";
 import SettlementPanel from "../components/SettlementPanel";
 import RiskStamp from "../components/RiskStamp";
@@ -25,6 +26,7 @@ export default function CasePage() {
   const [selectionKey, setSelectionKey] = useState(0);
   // a context value opened in the viewer; picking a finding clears it
   const [pinned, setPinned] = useState<Citation | null>(null);
+  const [leftTab, setLeftTab] = useState<"findings" | "chat">("findings");
   const openFact = (c: Citation) => { setPinned(c); setSelectionKey((k) => k + 1); };
 
   useEffect(() => () => client.releaseImages(), [client]);
@@ -38,7 +40,7 @@ export default function CasePage() {
 
   // findings in display order (grouped by severity), so numbering and j/k match what is on screen
   const findings = useMemo(
-    () => [...(data?.findings ?? [])].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)),
+    () => (data?.findings ?? []).filter((f) => !f.removed).sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)),
     [data],
   );
   // the first finding is selected from the first render, so the viewer opens straight on its page
@@ -73,6 +75,19 @@ export default function CasePage() {
       });
     }
     return saved;
+  };
+
+  // after an Apply: show the new outcome at once, then refetch the case, since a finding may have been added or
+  // removed and the server-side recalculation may have failed (current is null then)
+  const applied = async (current: Outcome | null) => {
+    if (current) {
+      setData((d) => d && { ...d, current, score: current.score, risk: current.risk, payable: current.payable });
+    }
+    try {
+      setData(await client.getCase(id));
+    } catch {
+      /* the next poll or reload shows the truth */
+    }
   };
 
   const viewer = (selected: Finding | null) => data && (
@@ -168,13 +183,26 @@ export default function CasePage() {
             </details>
           )}
           {context}
-          <p className="hint muted">Select a finding to see it on the page. <kbd>j</kbd> / <kbd>k</kbd> to move.</p>
-          <FindingList findings={findings} selectedId={selectedId} onSelect={(f) => { setPinned(null); setSelectedId(f.id); setSelectionKey((k) => k + 1); }} onReview={review} />
-          {data.dropped_findings.length > 0 && (
-            <details className="dropped">
-              <summary>Not proven ({data.dropped_findings.length})</summary>
-              <ul>{data.dropped_findings.map((d, i) => <li key={i}><strong>{d.title}</strong>: {d.reason}</li>)}</ul>
-            </details>
+          <div className="tabs" role="tablist" aria-label="Findings and chat">
+            {(["findings", "chat"] as const).map((t) => (
+              <button key={t} type="button" role="tab" className="tab" aria-selected={leftTab === t}
+                onClick={() => setLeftTab(t)}>{t === "findings" ? "Findings" : "Chat"}</button>
+            ))}
+          </div>
+          {leftTab === "chat" ? (
+            <ChatPanel caseId={data.id} client={client} findings={findings} onOpenCitation={openFact}
+              onOutcome={(c) => void applied(c)} pendingSelection={null} onClearSelection={() => {}} />
+          ) : (
+            <>
+              <p className="hint muted">Select a finding to see it on the page. <kbd>j</kbd> / <kbd>k</kbd> to move.</p>
+              <FindingList findings={findings} selectedId={selectedId} onSelect={(f) => { setPinned(null); setSelectedId(f.id); setSelectionKey((k) => k + 1); }} onReview={review} />
+              {data.dropped_findings.length > 0 && (
+                <details className="dropped">
+                  <summary>Not proven ({data.dropped_findings.length})</summary>
+                  <ul>{data.dropped_findings.map((d, i) => <li key={i}><strong>{d.title}</strong>: {d.reason}</li>)}</ul>
+                </details>
+              )}
+            </>
           )}
         </section>
         <section className="dossier-right" aria-label="Document viewer">
