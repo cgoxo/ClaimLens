@@ -7,8 +7,9 @@ from claimlens.ai import FakeAi
 from claimlens.models import Citation, Finding, PageInfo
 from claimlens.pipeline.checks import ALL_CHECKS
 from claimlens.pipeline.extract import extract
+from claimlens.pipeline.outcome import outcome
 from claimlens.pipeline.prove import prove
-from claimlens.pipeline.report import payable, risk_band, score, sort_findings, summarise
+from claimlens.pipeline.report import risk_band, score, sort_findings, summarise
 from tests.conftest import FAKE_AI, make_ctx
 
 
@@ -59,7 +60,7 @@ def _checked(ctx):
 
 
 def test_payable_zero_when_main_procedure_not_covered(ctx):
-    assert payable(ctx, _checked(ctx)) == 0
+    assert outcome(ctx.policy_facts, ctx.claim_facts, _checked(ctx)).payable == 0
 
 
 def test_payable_subtracts_room_excess_when_covered(tmp_path):
@@ -72,12 +73,12 @@ def test_payable_subtracts_room_excess_when_covered(tmp_path):
     (fixtures / "coverage.json").write_text(json.dumps([c for c in coverage if c["clause"] != "3.2"]))
     c = make_ctx(tmp_path, ai=FakeAi(fixtures))
     extract(c)
-    assert payable(c, _checked(c)) == 47000
+    assert outcome(c.policy_facts, c.claim_facts, _checked(c)).payable == 44000  # bills 48,500 less room excess 4,500
 
 
 def test_payable_none_without_claimed_amount(ctx):
     ctx.claim_facts.amount_claimed = None
-    assert payable(ctx, []) is None
+    assert outcome(ctx.policy_facts, ctx.claim_facts, []).payable is None
 
 
 def test_summary_from_ai(ctx):
@@ -86,7 +87,7 @@ def test_summary_from_ai(ctx):
 
 def test_summary_fallback(ctx):
     class Broken:
-        def summarise(self, findings):
+        def summarise(self, findings, outcome=""):
             raise RuntimeError("down")
 
     ctx.deps.ai = Broken()

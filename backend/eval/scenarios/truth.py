@@ -143,7 +143,10 @@ def truth_of(r: Recipe, forgeries: list[str], fmt: str, ocr: bool) -> Truth:
     excess = (r.room_rate - r.room_limit) * r.days if r.room_limit and r.room_rate > r.room_limit else 0
     if excess:
         found.append(("room_rent_limit", "coverage"))
-    payable = 0.0 if waiting else float(min(r.claimed - excess, r.sum_insured))
+    # the settlement works from bill lines: the hospital's itemised lines (not a retyped total) plus the
+    # pharmacy bills actually in the claim
+    in_claim = sum(li.amount.value for li in facts.bills[0].line_items) + sum(b.total.value for b in facts.bills[1:])
+    payable = 0.0 if waiting else float(min(min(r.claimed, in_claim - excess), r.sum_insured))
     return _done(found, payable, facts, policy_facts(r), labels)
 
 

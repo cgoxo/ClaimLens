@@ -15,7 +15,8 @@ from claimlens.pipeline.extract import extract
 from claimlens.pipeline.prove import prove
 from claimlens.models import now
 from claimlens.pipeline.read import ReadResult, open_document, read_document
-from claimlens.pipeline.report import payable, risk_band, score, sort_findings, summarise
+from claimlens.pipeline.outcome import outcome, outcome_text
+from claimlens.pipeline.report import sort_findings, summarise
 from claimlens.pipeline.text import months_between
 
 log = logging.getLogger(__name__)
@@ -127,10 +128,11 @@ def run_pipeline(case_id: str, deps) -> None:
         kept = sort_findings(kept)
         db.put_findings(case_id, kept)
 
-        value = score(kept)
-        report = dict(score=value, risk=risk_band(value), payable=payable(ctx, kept),
-                      summary=summarise(ctx, kept), dropped_findings=dropped,
-                      findings_count=len(kept))
+        step = "SETTLEMENT"  # a bug in the settlement fails the case with this step name
+        o = outcome(ctx.policy_facts, ctx.claim_facts, kept)
+        report = dict(score=o.score, risk=o.risk, payable=o.payable, analysis=o, current=o,
+                      rules_not_verified=ctx.rules_not_verified, summary=summarise(ctx, kept, outcome_text(o)),
+                      dropped_findings=dropped, findings_count=len(kept))
         register_invoices(ctx)
         db.update_case(case_id, status="READY", step=None, progress=None, finished_at=now(), **report)
     except Exception as e:
