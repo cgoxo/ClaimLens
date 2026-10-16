@@ -161,7 +161,7 @@ class Settlement(BaseModel):
     deductible: Deduction | None = None
     co_pay: Deduction | None = None
     si_cap: Deduction | None = None
-    payable: float
+    payable: float | None  # None when the claimed amount is unknown
     notes: list[Note] = []
 
 

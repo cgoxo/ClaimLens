@@ -8,12 +8,9 @@ from datetime import timedelta
 from claimlens.models import Citation, ClaimFacts, Finding, LineDeduction, PolicyFacts
 from claimlens.pipeline.context import Ctx
 from claimlens.pipeline.extract import labelled_text, locate
+from claimlens.pipeline.settlement import PROPORTIONATE
 from claimlens.pipeline.rules import icu_limit_rupees, is_non_payable, room_limit_rupees, rule_citation
 from claimlens.pipeline.text import months_between, normalise, parse_date, parse_money
-
-
-# Proportionate deduction scales these lines down; it never touches medicines, consumables or implants.
-PROPORTIONATE_CATEGORIES = ("doctor", "nursing", "surgery", "investigations")
 
 
 def _finding(code, title, detail, page, quote, amount=0.0, n=1, deductions=None, items=None) -> Finding:
@@ -121,7 +118,7 @@ def _room_rent(ctx: Ctx) -> list[Finding]:
         taken = {(b, i) for b, i, _, _ in over}
         for b, i, line in _lines(f):
             amount = _money(line.amount)
-            if line.category in PROPORTIONATE_CATEGORIES and amount and (b, i) not in taken:
+            if line.category in PROPORTIONATE and amount and (b, i) not in taken:
                 deductions.append(LineDeduction(bill=b, line=i, amount=round(amount * ratio, 2)))
     total = sum(d.amount for d in deductions)
     names = [f.bills[b].line_items[i].desc for b, i, _, _ in over if b >= 0]
