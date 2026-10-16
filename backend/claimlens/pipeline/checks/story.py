@@ -6,7 +6,7 @@ from collections import Counter
 from rapidfuzz import fuzz
 
 from claimlens.models import Citation, Fact, Finding
-from claimlens.pipeline.checks.coverage import ICU_WORDS, ROOM_WORDS, _kind_lines
+from claimlens.pipeline.checks.coverage import kind_lines
 from claimlens.pipeline.context import Ctx
 from claimlens.pipeline.rules import stay_nights
 from claimlens.pipeline.text import normalise, parse_date, parse_money
@@ -143,8 +143,8 @@ def _room_days_exceed_stay(ctx: Ctx) -> list[Finding]:
     nights = stay_nights(f)
     if nights is None or nights < 0:  # inverted dates are date_order's job
         return []
-    lines = [line for kind, words in (("room", ROOM_WORDS), ("icu", ICU_WORDS))
-             for _, _, line in _kind_lines(f, kind, words)]
+    found = {(b, i): line for kind in ("room", "icu") for b, i, line in kind_lines(f, kind)}
+    lines = list(found.values())
     days = [(d, line.days) for line in lines if line.days and (d := parse_money(line.days.value)) is not None]
     if not days and f.room and f.room.days and (d := parse_money(f.room.days.value)) is not None:
         days = [(d, f.room.days)]

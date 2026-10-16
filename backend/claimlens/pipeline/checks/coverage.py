@@ -37,8 +37,10 @@ def _lines(f: ClaimFacts):
             yield b, i, line
 
 
-def _kind_lines(f: ClaimFacts, category: str, words: re.Pattern, not_words: re.Pattern | None = None):
-    """Lines of one kind: by category; in a bill with no line of that category, by words in the description."""
+def kind_lines(f: ClaimFacts, category: str):
+    """(bill, line index, line) of one kind, "room" or "icu": by category; in a bill with no line of that
+    category, by words in the description. A line about the ICU is never a room line."""
+    words, not_words = (ROOM_WORDS, ICU_WORDS) if category == "room" else (ICU_WORDS, None)
     for b, bill in enumerate(f.bills):
         categorised = any(line.category == category for line in bill.line_items)
         for i, line in enumerate(bill.line_items):
@@ -107,7 +109,7 @@ def _room_rent(ctx: Ctx) -> list[Finding]:
     room = f.room
     rate, days = (_money(room.rate_per_day), _money(room.days)) if room else (None, None)
     fallback = (rate, days) if rate is not None and days is not None else None
-    lines = list(_kind_lines(f, "room", ROOM_WORDS, ICU_WORDS))
+    lines = list(kind_lines(f, "room"))
     over = _excess_per_day(lines, limit, fallback)
     if not lines and fallback and fallback[0] > limit:
         over = [(-1, -1, fallback[0], (fallback[0] - limit) * fallback[1])]
@@ -134,7 +136,7 @@ def _icu(ctx: Ctx) -> list[Finding]:
     limit, cite = icu_limit_rupees(ctx.policy_facts)
     if limit is None:
         return []
-    over = _excess_per_day(_kind_lines(f, "icu", ICU_WORDS), limit, None)
+    over = _excess_per_day(kind_lines(f, "icu"), limit, None)
     if not over:
         return []
     deductions = [LineDeduction(bill=b, line=i, amount=x) for b, i, _, x in over]

@@ -211,3 +211,11 @@ def test_duplicate_across_bills_same_day(ctx):
 
 def test_no_date_never_duplicate(ctx):
     assert _two_lines(ctx, [None]) == []
+
+
+def test_icu_room_line_days_counted_once(ctx):
+    from claimlens.models import Bill, LineItem
+
+    _set_bills(ctx, [Bill(page=3, kind="hospital", inpatient=True, line_items=[
+        LineItem(desc="ICU Room Charges", days=_fact(3), amount=_fact(9000))])])
+    assert _codes(check_story(ctx), "room_days_exceed_stay") == []
