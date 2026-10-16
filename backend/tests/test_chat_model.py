@@ -61,7 +61,7 @@ def test_vertex_maps_function_call():
     turns += tool_turn(step, ToolResult("page text"))
     assert turns[1].role == "model" and turns[1].parts[0].function_call.name == "read_page"
     assert turns[2].parts[0].function_response.name == "read_page"
-    assert chat.step("sys", turns, TOOLS) == Final({"answer": "x"})
+    assert chat.step("sys", turns, TOOLS) == Final({"answer": "x", "citations": [], "proposals": []})
 
 
 def test_vertex_text_reply_becomes_final():
@@ -83,6 +83,28 @@ def test_tool_turn_adds_image_part():
     assert turns[-1].role == "user"
     assert turns[-1].parts[-1].inline_data.data == b"png"
     assert len(tool_turn(ToolCall("x", {}), ToolResult("t"))) == 1
+
+
+def test_parallel_calls_keep_only_the_chosen_one():
+    parts = [types.Part(text="thinking"),
+             types.Part(function_call=types.FunctionCall(name="read_page", args={"page": 1})),
+             types.Part(function_call=types.FunctionCall(name="read_page", args={"page": 2}))]
+    response = SimpleNamespace(
+        function_calls=[p.function_call for p in parts[1:]], text=None,
+        candidates=[SimpleNamespace(content=types.Content(role="model", parts=parts))])
+    chat = make_chat(response)
+    turns = user_turn("q")
+    step = chat.step("sys", turns, TOOLS)
+    turns += tool_turn(step, ToolResult("t"))
+    model = turns[1]
+    assert [p.function_call.args for p in model.parts if p.function_call] == [{"page": 1}]
+    assert model.parts[0].text == "thinking"
+    assert sum(1 for t in turns for p in t.parts if p.function_response) == 1
+
+
+def test_final_answer_gets_all_keys():
+    chat = make_chat(reply(call=("final_answer", {"answer": "x"})))
+    assert chat.step("sys", user_turn("q"), TOOLS).args == {"answer": "x", "citations": [], "proposals": []}
 
 
 def test_vertex_summarise_thread():

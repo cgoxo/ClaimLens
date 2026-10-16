@@ -99,8 +99,19 @@ class VertexChat:
         call = calls[0]
         args = dict(call.args or {})
         if call.name == "final_answer":
+            args.setdefault("answer", "")
+            args.setdefault("citations", [])
+            args.setdefault("proposals", [])
             return Final(args)
-        return ToolCall(call.name, args, raw=response.candidates[0].content)
+        # keep the parts up to and including the chosen call: one function_response must answer exactly one call
+        content = response.candidates[0].content
+        parts = []
+        for part in content.parts or []:
+            parts.append(part)
+            if part.function_call is not None and part.function_call.name == call.name \
+                    and dict(part.function_call.args or {}) == args:
+                break
+        return ToolCall(call.name, args, raw=types.Content(role="model", parts=parts))
 
     def summarise_thread(self, messages: list[ChatMessage]) -> str:
         from google.genai import types
