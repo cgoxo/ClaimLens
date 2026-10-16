@@ -107,3 +107,28 @@ def test_column_major_form_quote_grounds_against_what_the_ai_read(tmp_path):
     found, bbox = locate(ctx, "claim", 1, "Patient Name: Ravi Kumar")
     assert found and bbox is not None
     assert locate(ctx, "claim", 1, "Patient Name: Apollo Clinic") == (False, None)
+
+
+def _with_policy_rules(tmp_path, **rules):
+    fixtures = tmp_path / "ai"
+    shutil.copytree(FAKE_AI, fixtures)
+    policy = json.loads((fixtures / "policy.json").read_text())
+    policy.update(rules)
+    (fixtures / "policy.json").write_text(json.dumps(policy))
+    c = make_ctx(tmp_path, ai=FakeAi(fixtures))
+    extract(c)
+    return c
+
+
+def test_rule_with_wrong_quote_is_dropped_and_listed(tmp_path):
+    c = _with_policy_rules(tmp_path, co_pays=[{"percent": 10, "clause": "9.9", "page": 1, "quote": "no such sentence"}])
+    assert c.policy_facts.co_pays == []
+    assert c.rules_not_verified[0]["rule"] == "CoPay"
+
+
+def test_rule_with_real_quote_is_kept(tmp_path):
+    c = _with_policy_rules(tmp_path, room_limit={
+        "percent_of_si": 1, "clause": "2.1", "page": 1,
+        "quote": "Room rent is payable up to 1% of the sum insured per day"})
+    assert c.policy_facts.room_limit.percent_of_si == 1
+    assert c.rules_not_verified == []
