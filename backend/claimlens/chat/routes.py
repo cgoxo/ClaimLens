@@ -1,8 +1,9 @@
 """Chat routes: owner only, case READY, and CHAT must be on."""
+import math
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from claimlens.api import _deps, _own_case
 from claimlens.auth import current_user
@@ -22,7 +23,7 @@ def _chat_case(request: Request, case_id: str, user: str) -> Case:
 
 
 class MessageIn(BaseModel):
-    text: str
+    text: str = Field(max_length=20000)  # a blunt bound before stripping; the real limit is chat_max_chars
     selection: Box | None = None
 
 
@@ -31,6 +32,8 @@ def _check_selection(deps, case_id: str, sel: Box) -> Box:
     if page is None:
         raise HTTPException(400, f"There is no page {sel.page} in {sel.doc}")
     x0, y0, x1, y1 = sel.bbox
+    if not all(math.isfinite(v) for v in sel.bbox):
+        raise HTTPException(400, "The selected box is not valid")
     if x1 <= x0 or y1 <= y0:
         raise HTTPException(400, "The selected box has no size")
     if x0 < 0 or y0 < 0 or x1 > page.width or y1 > page.height:
@@ -42,11 +45,12 @@ def _check_selection(deps, case_id: str, sel: Box) -> Box:
 def get_chat(case_id: str, request: Request, user: str = Depends(current_user)):
     case = _chat_case(request, case_id, user)
     deps = _deps(request)
-    thread = service.get_or_create_thread(deps, case, user)
+    thread = deps.db.active_thread(case.id)  # read only: the thread is created by the first message
     previous = [{"id": t.id, "summary": t.summary, "created_at": t.created_at.isoformat()}
-                for t in deps.db.list_threads(case.id) if t.id != thread.id]
-    return {"thread": thread.model_dump(mode="json"),
-            "messages": [m.model_dump(mode="json") for m in deps.db.get_messages(case.id, thread.id)],
+                for t in deps.db.list_threads(case.id) if t.status != "active"]
+    messages = deps.db.get_messages(case.id, thread.id) if thread else []
+    return {"thread": thread.model_dump(mode="json") if thread else None,
+            "messages": [m.model_dump(mode="json") for m in messages],
             "previous": previous}
 
 

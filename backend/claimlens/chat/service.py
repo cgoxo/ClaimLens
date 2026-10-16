@@ -1,4 +1,5 @@
 """Chat threads, carried memory, and the ask / decide entry points the API calls."""
+import logging
 import uuid
 from typing import Literal
 
@@ -7,6 +8,7 @@ from claimlens.chat.apply import apply
 from claimlens.models import Box, Case, ChatMessage, ChatThread, Outcome, Proposal, now
 
 SUMMARY_WORDS = 150
+log = logging.getLogger(__name__)
 
 
 class ChatUnavailable(Exception):
@@ -52,7 +54,11 @@ def new_chat(deps, case: Case, by: str) -> ChatThread:
     if thread is not None:
         messages = deps.db.get_messages(case.id, thread.id)
         if messages:
-            summary = " ".join(deps.chat_ai.summarise_thread(messages).split()[:SUMMARY_WORDS])
+            try:
+                summary = " ".join(deps.chat_ai.summarise_thread(messages).split()[:SUMMARY_WORDS])
+            except Exception:
+                log.exception("Could not summarise chat thread %s", thread.id)
+                summary = f"Earlier chat of {len(messages)} messages; summary unavailable."
         deps.db.close_thread(case.id, thread.id, summary)
     fresh = ChatThread(id=_id(), carried_summary=summary, created_by=by, created_at=now())
     deps.db.create_thread(case.id, fresh)

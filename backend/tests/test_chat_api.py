@@ -85,9 +85,38 @@ def test_ask_and_get(app, client, case_id):
     assert got["thread"]["status"] == "active" and got["previous"] == []
 
 
-def test_empty_get(client, case_id):
+def test_empty_get(app, client, case_id):
     got = client.get(_url(case_id), headers=A).json()
-    assert got["messages"] == [] and got["previous"] == []
+    assert got == {"thread": None, "messages": [], "previous": []}
+    assert app.state.deps.db.active_thread(case_id) is None  # a GET creates nothing
+
+
+def test_new_chat_survives_summary_failure(app, client, case_id):
+    app.state.deps.chat_ai = FakeChat([_final()])
+    _ask(client, case_id, {"text": "Why?"})
+
+    def boom(messages):
+        raise RuntimeError("503")
+
+    app.state.deps.chat_ai.summarise_thread = boom
+    r = client.post(_url(case_id, "/new"), headers=A)
+    assert r.status_code == 200
+    assert r.json()["carried_summary"] == "Earlier chat of 2 messages; summary unavailable."
+    got = client.get(_url(case_id), headers=A).json()
+    assert got["thread"]["id"] == r.json()["id"] and len(got["previous"]) == 1
+
+
+def test_huge_text_rejected(client, case_id):
+    assert _ask(client, case_id, {"text": " " * 20001}).status_code in (400, 422)
+
+
+def test_non_finite_selection_400(app, client, case_id):
+    page = app.state.deps.db.get_pages(case_id)[0]
+    for bbox in ("[0, 0, Infinity, 10]", "[NaN, 0, 10, 10]"):
+        body = '{"text": "x", "selection": {"doc": "%s", "page": %d, "bbox": %s}}' % (page.doc, page.page, bbox)
+        r = client.post(_url(case_id, "/messages"), content=body,
+                        headers={**A, "Content-Type": "application/json"})
+        assert r.status_code == 400, bbox
 
 
 def test_too_long_400(client, case_id):
