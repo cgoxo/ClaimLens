@@ -23,6 +23,10 @@ def _finding(code, title, detail, page, quote, amount=0.0, n=1, deductions=None,
                    citations=[Citation(doc="policy", page=page, quote=quote)])
 
 
+ROOM_WORDS = re.compile(r"\broom\b", re.I)
+ICU_WORDS = re.compile(r"\bicu\b|\bintensive care\b", re.I)
+
+
 def _money(fact):
     return parse_money(fact.value) if fact is not None else None
 
@@ -33,14 +37,13 @@ def _lines(f: ClaimFacts):
             yield b, i, line
 
 
-def _kind_lines(f: ClaimFacts, category: str, words: tuple[str, ...], not_words: tuple[str, ...] = ()):
+def _kind_lines(f: ClaimFacts, category: str, words: re.Pattern, not_words: re.Pattern | None = None):
     """Lines of one kind: by category; in a bill with no line of that category, by words in the description."""
     for b, bill in enumerate(f.bills):
         categorised = any(line.category == category for line in bill.line_items)
         for i, line in enumerate(bill.line_items):
-            desc = line.desc.lower()
-            if line.category == category or (not categorised and any(w in desc for w in words)
-                                             and not any(w in desc for w in not_words)):
+            if line.category == category or (not categorised and words.search(line.desc)
+                                             and not (not_words and not_words.search(line.desc))):
                 yield b, i, line
 
 
@@ -70,7 +73,8 @@ def _waiting_periods(ctx: Ctx) -> list[Finding]:
             out.append(_finding(
                 "waiting_period", f"{wp.condition} is in its {wp.months}-month waiting period (clause {_clause_no(wp.clause) or wp.clause})",
                 f"The policy started {start:%d-%b-%Y}; treatment on {treated:%d-%b-%Y} is only {months} months later.",
-                wp.page, wp.quote, n=n, deductions=_claim_deduction(f)))
+                wp.page, wp.quote, n=n, deductions=(d := _claim_deduction(f)),
+                amount=sum(x.amount for x in d)))
     return out
 
 
@@ -90,7 +94,8 @@ def _excess_per_day(found, limit: float, fallback: tuple[float, float] | None):
                 continue
             (rate, days), used_fallback = fallback, True
         if rate > limit:
-            out.append((b, i, rate, (rate - limit) * days))
+            excess, amount = (rate - limit) * days, _money(line.amount)
+            out.append((b, i, rate, min(excess, amount) if amount else excess))
     return out
 
 
@@ -102,7 +107,7 @@ def _room_rent(ctx: Ctx) -> list[Finding]:
     room = f.room
     rate, days = (_money(room.rate_per_day), _money(room.days)) if room else (None, None)
     fallback = (rate, days) if rate is not None and days is not None else None
-    lines = list(_kind_lines(f, "room", ("room",), ("icu", "intensive care")))
+    lines = list(_kind_lines(f, "room", ROOM_WORDS, ICU_WORDS))
     over = _excess_per_day(lines, limit, fallback)
     if not lines and fallback and fallback[0] > limit:
         over = [(-1, -1, fallback[0], (fallback[0] - limit) * fallback[1])]
@@ -111,9 +116,10 @@ def _room_rent(ctx: Ctx) -> list[Finding]:
     deductions = [LineDeduction(bill=b, line=i, amount=x) for b, i, _, x in over]
     if p.proportionate_deduction is not None:
         ratio = 1 - limit / max(r for _, _, r, _ in over)
+        taken = {(b, i) for b, i, _, _ in over}
         for b, i, line in _lines(f):
             amount = _money(line.amount)
-            if line.category in PROPORTIONATE_CATEGORIES and amount:
+            if line.category in PROPORTIONATE_CATEGORIES and amount and (b, i) not in taken:
                 deductions.append(LineDeduction(bill=b, line=i, amount=round(amount * ratio, 2)))
     total = sum(d.amount for d in deductions)
     names = [f.bills[b].line_items[i].desc for b, i, _, _ in over if b >= 0]
@@ -128,7 +134,7 @@ def _icu(ctx: Ctx) -> list[Finding]:
     limit, cite = icu_limit_rupees(ctx.policy_facts)
     if limit is None:
         return []
-    over = _excess_per_day(_kind_lines(f, "icu", ("icu", "intensive care")), limit, None)
+    over = _excess_per_day(_kind_lines(f, "icu", ICU_WORDS), limit, None)
     if not over:
         return []
     deductions = [LineDeduction(bill=b, line=i, amount=x) for b, i, _, x in over]
@@ -219,9 +225,9 @@ def check_coverage(ctx: Ctx) -> list[Finding]:
         clause = _clause_no(item.clause)
         if (clause and clause in covered_clauses) or (item.page, normalise(item.quote)) in covered_quotes:
             continue
-        if has_room and "room" in item.item.lower():
+        if has_room and ROOM_WORDS.search(item.item):
             continue
-        if has_icu and ("icu" in item.item.lower() or "intensive care" in item.item.lower()):
+        if has_icu and ICU_WORDS.search(item.item):
             continue
         groups.setdefault((clause,) if clause else (item.page, normalise(item.quote)), []).append(item)
 
@@ -230,17 +236,22 @@ def check_coverage(ctx: Ctx) -> list[Finding]:
         verdict = "not_covered" if any(i.verdict == "not_covered" for i in group) else "partly_covered"
         clause = f" (clause {_clause_no(first.clause)})" if _clause_no(first.clause) else ""
         names = ", ".join(dict.fromkeys(i.item for i in group))
-        deductions, lines = [], []
+        per_line: dict[tuple[int, int], float] = {}
+        lines = []
         for i in group:
             hit = _match_line(ctx.claim_facts, i.item)
             if hit is None:
-                deductions.append(LineDeduction(bill=-1, line=-1, amount=i.amount_not_payable))
-                continue
-            b, li, line = hit
-            whole = _money(line.amount) if i.verdict == "not_covered" else None
-            deductions.append(LineDeduction(bill=b, line=li, amount=whole or i.amount_not_payable))
-            lines.append(line.desc)
-        deductions = [d for d in deductions if d.amount]
+                key, amount = (-1, -1), i.amount_not_payable
+            else:
+                key, line = (hit[0], hit[1]), hit[2]
+                whole = _money(line.amount) if i.verdict == "not_covered" else None
+                amount = whole or i.amount_not_payable
+                lines.append(line.desc)
+            per_line[key] = per_line.get(key, 0) + amount
+            if key != (-1, -1) and _money(hit[2].amount):
+                per_line[key] = min(per_line[key], _money(hit[2].amount))
+        lines = list(dict.fromkeys(lines))
+        deductions = [LineDeduction(bill=b, line=li, amount=a) for (b, li), a in per_line.items() if a]
         derived.append(_finding(verdict, f"{names}: {verdict.replace('_', ' ')}{clause}", first.reason,
                                 first.page, first.quote, amount=sum(d.amount for d in deductions), n=n,
                                 deductions=deductions, items=lines))

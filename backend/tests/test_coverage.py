@@ -196,3 +196,50 @@ def test_unmatched_item_is_a_claim_level_deduction(tmp_path):
 def test_waiting_period_deducts_the_claim(ctx):
     f = _only(ctx, "waiting_period")
     assert f.deductions == [LineDeduction(bill=-1, line=-1, amount=51500)]
+    assert f.amount_not_payable == 51500
+
+
+# --- fix round 1 ----------------------------------------------------------------
+
+def test_two_items_on_one_line_deduct_it_once(tmp_path):
+    items = [{"item": name, "verdict": "not_covered", "clause": "4.1", "page": 3,
+              "quote": "Cosmetic treatment, dental treatment"} for name in ("Cosmetic laser", "Laser therapy")]
+    c = _with_coverage(tmp_path, items)
+    c.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[_line("Cosmetic laser therapy", 2500)])]
+    f = _only(c, "not_covered")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=2500)]
+    assert f.items == ["Cosmetic laser therapy"] and f.amount_not_payable == 2500
+
+
+def test_room_excess_is_capped_at_the_line_amount(ctx):
+    _room_case(ctx, False)
+    ctx.claim_facts.bills[0].line_items[0] = _line("Ward", 2000, "room", 3, 4500)
+    f = _only(ctx, "room_rent_limit")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=2000)]
+
+
+def test_room_line_is_not_also_proportionately_cut(ctx):
+    _room_case(ctx, True)
+    ctx.claim_facts.bills[0].line_items[0] = _line("Nursing - room", 13500, "nursing", 3, 4500)
+    ctx.claim_facts.bills[0].line_items[1:] = [_line("Dr visit", 9000, "doctor")]
+    f = _only(ctx, "room_rent_limit")
+    assert [d for d in f.deductions if d.line == 0] == [LineDeduction(bill=0, line=0, amount=4500)]
+
+
+def test_icu_words_need_a_whole_word(ctx):
+    ctx.policy_facts.icu_limit = Limit(clause="2.3", page=1, quote="ICU", amount=6000)
+    ctx.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[
+        _line("Particulars of stay", 9000, "other", 2, 12000), _line("Bathroom fittings", 500, "other", 1, 9000)])]
+    assert [f for f in check_coverage(ctx) if f.code == "icu_limit"] == []
+    ctx.policy_facts.room_limit = RoomLimit(clause="2.1", page=1, quote="(Rs 3,000 per day)", amount=3000)
+    assert [d for f in check_coverage(ctx) if f.code == "room_rent_limit" for d in f.deductions
+            if d.bill == 0 and d.line == 1] == []
+
+
+def test_coverage_item_with_icu_letters_is_not_skipped(tmp_path):
+    items = [{"item": "Ventricular septal defect repair", "verdict": "not_covered", "clause": "4.1", "page": 3,
+              "quote": "Cosmetic treatment, dental treatment", "amount_not_payable": 900}]
+    c = _with_coverage(tmp_path, items)
+    c.policy_facts.icu_limit = Limit(clause="2.3", page=1, quote="ICU", amount=6000)
+    c.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[_line("ICU stay", 24000, "icu", 2, 12000)])]
+    assert _only(c, "not_covered").amount_not_payable == 900
