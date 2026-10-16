@@ -148,3 +148,56 @@ def test_money_strings_parse():
     p = PolicyFacts(sum_insured=F("Rs 3,00,000"), deductible=Deductible(amount=10000, page=1, quote="q"))
     s = settle(p, facts("₹ 4,00,000.00", bill(line("A", "Rs 4,00,000"))), [])
     assert s.claimed == 400000 and s.payable == 300000
+
+
+def test_bill_total_stands_in_when_no_line_has_amount():
+    b = Bill(page=1, line_items=[line("A", None)], total=F("Rs 20,000"))
+    s = settle(None, facts(30000, b), [finding("bill_outside_cover_window", "Outside window", (0, -1, 5000))])
+    assert len(s.lines) == 1 and s.lines[0].line == -1 and s.lines[0].desc == "Bill total"
+    assert s.lines[0].claimed == 20000 and s.lines[0].deductions[0].amount == 5000
+    assert s.payable == 15000
+
+
+def test_bill_total_not_added_when_a_line_has_amount():
+    b = Bill(page=1, line_items=[line("A", 5000)], total=F(5000))
+    s = settle(None, facts(5000, b), [])
+    assert len(s.lines) == 1 and s.lines[0].desc == "A"
+
+
+def test_no_bill_evidence_falls_back_to_claimed_with_note():
+    s = settle(None, facts(30000, bill(line("A", None))), [])
+    assert s.payable == 30000
+    assert any(n.affects_amount and "nothing supports" in n.text for n in s.notes)
+
+
+def test_deduction_on_missing_line_gives_note():
+    f = facts(5000, bill(line("A", 5000), line("B", None)))
+    s = settle(None, f, [finding("non_payable_items", "Non-payable", (0, 1, 300), (0, 9, 200), (3, 0, 100))])
+    assert s.payable == 5000
+    assert len([n for n in s.notes if n.affects_amount and "Non-payable" in n.text]) == 3
+
+
+def test_whole_bill_deduction_larger_than_bill():
+    f = facts(10000, bill(line("A", 4000)))
+    s = settle(None, f, [finding("bill_outside_cover_window", "Outside window", (0, -1, 6000))])
+    assert s.lines[0].payable == 0 and s.payable == 0
+    assert any(n.affects_amount and "Outside window" in n.text and "2,000" in n.text for n in s.notes)
+
+
+def test_two_findings_same_line_cumulative_cap():
+    f = facts(1000, bill(line("A", 1000)))
+    s = settle(None, f, [finding("a", "First", (0, 0, 700)), finding("b", "Second", (0, 0, 700))])
+    assert [d.amount for d in s.lines[0].deductions] == [700, 300] and s.payable == 0
+    assert any("Second" in n.text and n.affects_amount for n in s.notes)
+
+
+def test_claim_level_larger_than_bills():
+    f = facts(10000, bill(line("A", 4000)))
+    s = settle(None, f, [finding("room_rent_limit", "Room", (-1, -1, 9000.4))])
+    assert s.claim_level[0].amount == 4000 and s.payable == 0
+    assert any(n.affects_amount and "Room" in n.text for n in s.notes)
+
+
+def test_amount_string_not_a_number_is_left_out():
+    s = settle(None, facts(5000, bill(line("A", 5000), line("B", "n/a"))), [])
+    assert len(s.lines) == 1 and any("no amount" in n.text for n in s.notes)

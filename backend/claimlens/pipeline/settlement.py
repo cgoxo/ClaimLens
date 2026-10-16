@@ -42,11 +42,17 @@ def _from_finding(amount: float, finding: Finding) -> Deduction:
 def _lines(facts: ClaimFacts | None) -> list[SettlementLine]:
     out = []
     for b, bill in enumerate(facts.bills if facts else []):
+        found = False
         for i, item in enumerate(bill.line_items):
             amount = parse_money(item.amount.value) if item.amount else None
             if amount is not None:
+                found = True
                 out.append(SettlementLine(bill=b, line=i, desc=item.desc, category=item.category,
                                           claimed=amount, payable=amount))
+        total = parse_money(bill.total.value) if bill.total else None
+        if not found and total is not None:  # no itemised amounts: the bill total stands in as one line
+            out.append(SettlementLine(bill=b, line=-1, desc="Bill total", category="other",
+                                      claimed=total, payable=total))
     return out
 
 
@@ -60,20 +66,31 @@ def _take(line: SettlementLine, want: float, finding: Finding) -> float:
     return amount
 
 
-def _apply_line_deductions(lines: list[SettlementLine], findings: list[Finding]) -> list[Deduction]:
+def _unplaced(finding: Finding, left: float, notes: list[Note]) -> None:
+    notes.append(Note(text=f"{finding.title}: Rs {left:,.0f} could not be deducted because there is no bill line "
+                           "with an amount to take it from.", affects_amount=True))
+
+
+def _apply_line_deductions(lines: list[SettlementLine], findings: list[Finding],
+                           notes: list[Note]) -> list[Deduction]:
     claim_level: list[Deduction] = []
     for finding in findings:
         for d in finding.deductions:
             if d.bill < 0:
                 claim_level.append(_from_finding(d.amount, finding))
             elif d.line >= 0:
+                left = round(d.amount)
                 for line in lines:
                     if (line.bill, line.line) == (d.bill, d.line):
-                        _take(line, d.amount, finding)
+                        left -= _take(line, left, finding)
+                if left > 0:
+                    _unplaced(finding, left, notes)
             else:  # the whole bill: fill its lines in order
                 left = round(d.amount)
                 for line in (x for x in lines if x.bill == d.bill):
                     left -= _take(line, left, finding)
+                if left > 0:
+                    _unplaced(finding, left, notes)
     return claim_level
 
 
@@ -140,12 +157,17 @@ def settle(policy: PolicyFacts | None, facts: ClaimFacts | None, findings: list[
                           subtotal=0.0, payable=0.0, notes=notes)
 
     if not lines:
-        notes.append(Note(text="No bill line has an amount; the settlement starts from the claimed amount."))
-    claim_level = _apply_line_deductions(lines, findings)
+        notes.append(Note(text="No bill has a line amount or a total, so nothing supports the claimed amount; "
+                               "the settlement starts from the claimed amount.", affects_amount=True))
+    claim_level = _apply_line_deductions(lines, findings, notes)
     admissible = sum(x.payable for x in lines) if lines else claimed
     for d in claim_level:  # claim-level deductions cannot take more than the bills leave
-        d.amount = min(d.amount, admissible)
-        admissible -= d.amount
+        taken = min(d.amount, round(admissible))
+        if taken < d.amount:
+            notes.append(Note(text=f"{d.reason}: only Rs {taken:,.0f} of Rs {d.amount:,.0f} could be deducted; "
+                                   "the bills have nothing more to take it from.", affects_amount=True))
+        d.amount = taken
+        admissible -= taken
     subtotal = max(0.0, min(claimed, admissible))
     amount = subtotal
 
