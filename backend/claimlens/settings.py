@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     auth_mode: Literal["dev", "firebase"] = "dev"
     jobs: Literal["inline", "thread", "cloudtasks"] = "thread"
     bill_story: Literal["on", "off"] = "off"
+    chat: Literal["on", "off"] = "on"
 
     data_dir: Path = Path("./data")
     fake_ai_dir: Path = BACKEND_DIR / "tests" / "fixtures" / "ai" / "sample"
@@ -39,6 +40,12 @@ class Settings(BaseSettings):
     max_pages: int = 80
     max_files: int = 40
     daily_case_limit: int = 20
+    chat_max_tools: int = 6
+    chat_seconds: int = 60
+    chat_history: int = 20
+    chat_max_chars: int = 2000
+    chat_daily_limit: int = 200
+    chat_tool_chars: int = 8000
 
     @model_validator(mode="after")
     def _check(self):

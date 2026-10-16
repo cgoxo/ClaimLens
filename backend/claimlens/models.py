@@ -111,7 +111,7 @@ class LineDeduction(BaseModel):
 
 class Finding(BaseModel):
     id: str
-    check: Literal["tamper", "story", "duplicate", "cards", "coverage", "bill_story"]
+    check: Literal["tamper", "story", "duplicate", "cards", "coverage", "bill_story", "reviewer"]
     code: str
     severity: Severity
     title: str
@@ -122,6 +122,7 @@ class Finding(BaseModel):
     items: list[str] = []
     verified: bool = False
     review: Review | None = None
+    removed: bool = False  # no longer produced after a fact correction: never counts, hidden in the UI
 
 
 # --- settlement and outcome ---------------------------------------------------
@@ -202,6 +203,7 @@ class Case(BaseModel):
     finished_at: datetime | None = None
     seen_at: datetime | None = None  # when the owner last opened it after it finished
     findings_count: int | None = None
+    corrections: list[dict] = []  # [{path, old, new, by, at, reason, evidence, message_id}]
     rejected: list[dict] = []  # REJECTED: [{name, form, reason, page, quote}] for each file that stopped the case
 
 
@@ -212,6 +214,7 @@ class Fact(BaseModel):
     page: int
     quote: str
     bbox: BBox | None = None
+    source: Literal["document", "reviewer"] = "document"
 
 
 class Procedure(BaseModel):
@@ -375,3 +378,58 @@ class StoryVerdict(BaseModel):
     bill_quote: str
     story_page: int | None = None
     story_quote: str = ""
+
+
+# --- chat ---------------------------------------------------------------------
+
+class Box(BaseModel):
+    doc: str
+    page: int
+    bbox: BBox
+
+
+ProposalType = Literal["review_finding", "set_severity", "add_finding", "correct_fact"]
+ProposalStatus = Literal["pending", "applied", "ignored", "stale", "failed"]
+
+
+class Proposal(BaseModel):
+    id: str
+    type: ProposalType
+    reason: str = ""
+    finding_id: str | None = None
+    action: Literal["accept", "dismiss", "restore"] | None = None
+    severity: Severity | None = None
+    title: str = ""
+    detail: str = ""
+    citations: list[Citation] = []
+    path: str | None = None
+    value: str | float | None = None
+    evidence: Box | None = None
+    finding_version: int | None = None
+    status: ProposalStatus = "pending"
+    decided_by: str | None = None
+    decided_at: datetime | None = None
+    error: str | None = None
+
+
+class ChatMessage(BaseModel):
+    id: str
+    role: Literal["reviewer", "assistant"]
+    text: str
+    selection: Box | None = None
+    citations: list[Citation] = []
+    proposals: list[Proposal] = []
+    tool_calls: list[dict] = []
+    verified: bool = True
+    notes: list[str] = []
+    by: str
+    created_at: datetime = PydField(default_factory=now)
+
+
+class ChatThread(BaseModel):
+    id: str
+    status: Literal["active", "closed"] = "active"
+    carried_summary: str = ""
+    summary: str = ""
+    created_by: str
+    created_at: datetime = PydField(default_factory=now)
