@@ -190,3 +190,31 @@ def test_new_forgeries_expect_their_findings():
     assert [v.verdict for v in unrelated.story_verdicts] == ["unrelated"] and unrelated.band == "low"
     _, dup = _truth(["duplicate_line"])
     assert dup.codes == Counter({"duplicate_charge": 1})
+
+
+def test_explicit_non_payable_list_deducts_only_the_named_items():
+    r = _plain(non_payable_items=["admission kit", "diapers"],
+               consumables=[("Admission kit", 700), ("Diapers", 300), ("Gloves", 500)])
+    r = r.copy(claimed=r.hospital_total)
+    assert expected_settlement(r) == r.hospital_total - 1000  # the gloves are not on the list
+    p = policy_facts(r)
+    assert p.non_payable.items == ["admission kit", "diapers"] and not p.non_payable.standard_list
+    assert "These items are not payable: admission kit, diapers." in _text(policy_pdf(r))
+    assert expected_settlement(r.copy(non_payable_items=[])) == r.hospital_total
+
+
+def test_truth_settlement_caps_at_the_sum_insured_after_the_other_rules():
+    # 100,000 less a 10,000 deductible and a 10% co-pay is 81,000; a Rs 50,000 sum insured caps it
+    assert expected_settlement(_plain(deductible=10000, co_pay=10, sum_insured=50000)) == 50000
+    assert expected_settlement(_plain(deductible=10000, co_pay=10, sum_insured=90000)) == 81000
+
+
+def test_make_recipe_mixes_both_non_payable_variants_and_a_low_sum_insured():
+    recipes = [make_recipe(s, "t") for s in range(300)]
+    assert any(r.non_payable_standard for r in recipes)
+    explicit = [r for r in recipes if r.non_payable_items]
+    assert explicit and all(r.non_payable_standard is False for r in explicit)
+    for r in explicit:  # one listed item on the bill and one that is not listed
+        descs = [d.lower() for d, _ in r.consumables]
+        assert any(d in r.non_payable_items for d in descs) and any(d not in r.non_payable_items for d in descs)
+    assert any(r.sum_insured < r.claimed for r in recipes)

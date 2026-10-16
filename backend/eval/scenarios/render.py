@@ -98,6 +98,9 @@ def clauses(r: Recipe) -> list[Clause]:
     if r.non_payable_standard:
         out.append(Clause("non_payable", "5.4", "Items not payable", 4,
                           "Standard non-payable items (gloves, masks, admission kit, etc.) are not payable."))
+    elif r.non_payable_items:
+        out.append(Clause("non_payable", "5.4", "Items not payable", 4,
+                          f"These items are not payable: {', '.join(r.non_payable_items)}."))
     if r.pre_days is not None:
         out.append(Clause("window", "5.5", "Cover window", 4,
                           f"Bills are covered from {r.pre_days} days before admission to {r.post_days} days after discharge."))

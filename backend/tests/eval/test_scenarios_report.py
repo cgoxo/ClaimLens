@@ -1,4 +1,4 @@
-from eval.scenarios.report import action_matrix, band_matrix, code_table, render, rule_table, worst
+from eval.scenarios.report import action_matrix, band_matrix, code_table, render, rule_table, silent_rule_table, worst
 
 
 def _row(expected, found, status=("READY", "READY"), band=("low", "low"), payable=(100.0, 100.0), fmt="one_pdf"):
@@ -55,3 +55,12 @@ def test_rule_table_counts_found_and_proved():
     t = rule_table([a, b, _row({}, {})])
     assert t["icu_limit"] == {"expected": 2, "proved": 2} and t["room_rent_limit"] == {"expected": 1, "proved": 0}
     assert "Found and proved" in render([a], target="live", date="2026-10-16")
+
+
+def test_silent_rules_are_reported_through_payable_accuracy():
+    ok = {**_row({}, {}, payable=(100.0, 100.0)), "rules": ["co_pay", "deductible"]}
+    bad = {**_row({}, {}, payable=(100.0, 90.0)), "rules": ["co_pay"]}
+    t = silent_rule_table([ok, bad, _row({}, {})])
+    assert t["co_pay"] == {"cases": 2, "payable_ok": 1} and t["deductible"] == {"cases": 1, "payable_ok": 1}
+    assert t["sub_limit"] == {"cases": 0, "payable_ok": 0}
+    assert "no finding code" in render([ok], target="live", date="2026-10-16")

@@ -18,7 +18,7 @@ from claimlens.ocr import DocAiOcr
 from eval.scenarios.forgeries import FORGERIES, pick
 from eval.scenarios.recipe import make_recipe
 from eval.scenarios.targets import LocalTarget
-from eval.scenarios.truth import truth_of
+from eval.scenarios.truth import rules_present, truth_of
 
 PROJECT = "social-pulse-510513"
 PROCESSOR = "projects/social-pulse-510513/locations/us/processors/86b3907ea0dbb405"
@@ -60,7 +60,7 @@ def main(n: int, seed: int, formats: list[str], workers: int, offline: bool = Fa
         row = {"seed": case_seed, "forgeries": names, "fmt": fmt, "expected_codes": dict(truth.codes),
                "found_codes": found, "status_expected": truth.status, "status_found": status,
                "band_expected": truth.band, "band_found": band, "payable_expected": truth.payable,
-               "payable_found": payable, "recommendation_expected": truth.recommendation,
+               "payable_found": payable, "rules": rules_present(recipe), "recommendation_expected": truth.recommendation,
                "recommendation_found": advice, "error": error, "seconds": secs, "case_id": cid}
         logging.info("seed %s %s %s -> %s", case_seed, fmt, names or ["clean"], status)
         return row

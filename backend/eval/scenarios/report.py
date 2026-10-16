@@ -53,6 +53,19 @@ def rule_table(rows: list[dict]) -> dict[str, dict]:
     return out
 
 
+SILENT_RULES = ["proportionate", "deductible", "co_pay", "sub_limit", "sum_insured_cap"]
+
+
+def silent_rule_table(rows: list[dict]) -> dict[str, dict]:
+    """Payable accuracy (within Rs 1) for the cases where each finding-less rule is present."""
+    out = {}
+    for name in SILENT_RULES:
+        cases = [r for r in rows if name in r.get("rules", []) and r["payable_expected"] is not None]
+        ok = sum(1 for r in cases if r["payable_found"] is not None and abs(r["payable_found"] - r["payable_expected"]) <= 1)
+        out[name] = {"cases": len(cases), "payable_ok": ok}
+    return out
+
+
 def passed(r: dict) -> bool:
     """Right status, no missing codes, no extra codes other than low ones."""
     if r["error"] or r["status_expected"] != r["status_found"]:
@@ -104,6 +117,11 @@ def render(rows: list[dict], target: str, date: str | None = None) -> str:
     lines += ["", "## Policy rules found and proved", "", "| Rule | Cases expected | Found and proved |", "| --- | --- | --- |"]
     for code, t in rule_table(rows).items():
         lines.append(f"| {code} | {t['expected']} | {t['proved']} |")
+    lines += ["", "Proportionate deduction, deductible, co-pay, sub-limit and the sum-insured cap have no finding "
+              "code. They are checked through payable accuracy:", "",
+              "| Rule present | Cases | Payable within Rs 1 |", "| --- | --- | --- |"]
+    for name, t in silent_rule_table(rows).items():
+        lines.append(f"| {name} | {t['cases']} | {t['payable_ok']} |")
     lines += ["",
               f"## Rejections: {rej_ok}/{len(rej)} right", "", "## By format", "",
               "| Format | Cases | Passed |", "| --- | --- | --- |"]

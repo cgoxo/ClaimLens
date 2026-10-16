@@ -110,7 +110,8 @@ def policy_facts(r: Recipe) -> PolicyFacts:
             "co_pay": lambda: CoPay(**where, percent=r.co_pay,
                                     applies="all" if r.co_pay_age is None else "age_over", age=r.co_pay_age),
             "sub_limit": lambda: SubLimit(**where, applies_to=r.condition, amount=r.sub_limit),
-            "non_payable": lambda: NonPayable(**where, standard_list=True),
+            "non_payable": lambda: NonPayable(**where, standard_list=r.non_payable_standard,
+                                              items=[] if r.non_payable_standard else list(r.non_payable_items)),
             "window": lambda: Window(**where, pre_days=r.pre_days, post_days=r.post_days)}[c.kind]()
     return PolicyFacts(insurer_name=_fact("Example Health Insurance Co.", 1), policy_number=_fact(r.policy_no, 1),
                        start_date=_fact(day(r.start), 1), sum_insured=_fact(r.sum_insured, 1, money(r.sum_insured)),
@@ -158,6 +159,20 @@ def _story(r: Recipe, facts: ClaimFacts) -> list[tuple[str, str]]:
     return out
 
 
+def non_payable_descs(r: Recipe) -> set:
+    """The bill items the policy's non-payable clause covers: all the standard-list consumables, or the named ones."""
+    if r.non_payable_standard:
+        return {d for d, _ in r.consumables}
+    return {d for d, _ in r.consumables if d.lower() in r.non_payable_items}
+
+
+def rules_present(r: Recipe) -> list[str]:
+    """The rules that have no finding code of their own: only the payable shows whether they were applied."""
+    return [name for name, on in (("proportionate", r.proportionate and bool(r.room_limit)), ("deductible", r.deductible),
+                                  ("co_pay", r.co_pay), ("sub_limit", r.sub_limit),
+                                  ("sum_insured_cap", r.sum_insured < r.claimed)) if on]
+
+
 def in_waiting(r: Recipe) -> bool:
     return r.condition in WAITING_LIST and months_between(r.start, r.procedure_day) < 24
 
@@ -190,9 +205,8 @@ def expected_settlement(r: Recipe, missing_last: bool = False) -> float:
         icu_limit = r.sum_insured * r.icu_limit_pct / 100
         if r.icu_rate > icu_limit:
             cut += round((r.icu_rate - icu_limit) * r.icu_days)
-    if r.non_payable_standard:
-        named = {d for d, _ in r.consumables}
-        cut += sum(a for d, a in items if d in named)
+    named = non_payable_descs(r)
+    cut += sum(a for d, a in items if d in named)
     cut += sum(p.amount for p in pharmacies if outside_window(r, p))
 
     amount = max(0, min(r.claimed, billed - cut))
@@ -258,7 +272,7 @@ def truth_of(r: Recipe, forgeries: list[str], fmt: str, ocr: bool) -> Truth:
         found.append(("room_rent_limit", "coverage"))
     if r.icu_limit_pct and r.icu_days and r.icu_rate > r.sum_insured * r.icu_limit_pct / 100:
         found.append(("icu_limit", "coverage"))
-    if r.non_payable_standard and r.consumables:
+    if non_payable_descs(r):
         found.append(("non_payable_items", "coverage"))
     present = r.pharmacies[:len(facts.bills) - 1]
     found += [("bill_outside_cover_window", "coverage")] * sum(1 for p in present if outside_window(r, p))

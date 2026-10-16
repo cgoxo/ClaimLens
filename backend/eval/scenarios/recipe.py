@@ -18,7 +18,8 @@ CONDITIONS = [("Cataract", "Phacoemulsification with IOL implant", True),
 WAITING_LIST = ["Cataract", "Hernia", "Knee replacement", "Kidney stones"]
 # bill items on the standard non-payable list (the policy may or may not carry the clause)
 STANDARD_CONSUMABLES = ["Gloves", "Face mask", "Admission kit", "Registration charges", "Toiletries",
-                        "Cotton and dressing material"]
+                        "Cotton and dressing material", "Attendant charges", "Diapers"]
+LISTED_ITEMS = ["admission kit", "attendant charges", "diapers"]  # what an explicit non-payable clause names
 
 
 @dataclass
@@ -61,6 +62,7 @@ class Recipe:
     icu_limit_pct: float | None = None  # percent of the sum insured per day
     proportionate: bool = False
     non_payable_standard: bool = False  # the policy carries the standard non-payable clause
+    non_payable_items: list = field(default_factory=list)  # or names its non-payable items (lower case)
     pre_days: int | None = None  # the cover window (both or neither)
     post_days: int | None = None
     # on the bill
@@ -157,6 +159,11 @@ def _add_rules(r: Recipe, x: np.random.Generator) -> None:
     k = int(x.integers(1, 4))
     cons = [(str(c), int(x.integers(1, 26)) * 100) for c in x.choice(STANDARD_CONSUMABLES, size=k, replace=False)]
     win_on, pre, post = x.random() < 0.3, int(x.choice([30, 60])), int(x.choice([30, 60, 90]))
+    explicit, other, other_amount = x.random() < 0.5, str(x.choice(["Gloves", "Face mask", "Toiletries"])), \
+        int(x.integers(1, 26)) * 100
+    listed = [str(d) for d in x.choice(LISTED_ITEMS, size=int(x.integers(2, 4)), replace=False)]
+    listed_bill = [(d, int(x.integers(1, 26)) * 100) for d in listed[: int(x.integers(1, len(listed) + 1))]]
+    cap_on, cap_factor = x.random() < 0.12, x.uniform(0.2, 0.45)
     out_on, early, gap, amount = x.random() < 0.6, x.random() < 0.7, int(x.integers(3, 20)), int(x.integers(3, 20)) * 100
 
     if d_on:
@@ -170,8 +177,14 @@ def _add_rules(r: Recipe, x: np.random.Generator) -> None:
             r.patient_age = any_age
     elif age_known:
         r.patient_age = any_age
-    r.proportionate, r.non_payable_standard = prop, np_on
-    if cons_on:
+    r.proportionate = prop
+    if np_on and explicit:
+        r.non_payable_items = listed
+        # the bill has some listed items and one the clause does not name
+        r.consumables = [(d.capitalize(), a) for d, a in listed_bill] + [(other, other_amount)]
+    elif np_on:
+        r.non_payable_standard = True
+    if cons_on and not r.consumables:
         r.consumables = cons
     if win_on:
         r.pre_days, r.post_days = pre, post
@@ -184,3 +197,6 @@ def _add_rules(r: Recipe, x: np.random.Generator) -> None:
             r.pharmacies = [*r.pharmacies, Pharmacy(f"PH-{r.run}-{r.seed}-w", when, amount, inpatient=False)]
     if sub_on:
         r.sub_limit = max(5000, int(round(r.hospital_total * sub_factor / 1000)) * 1000)
+    if cap_on and not (r.room_limit or r.icu_days or r.sub_limit):
+        # a sum insured below the bills: the cap bites after the deductible and co-pay
+        r.sum_insured = max(3000, int(round(r.hospital_total * cap_factor / 1000)) * 1000)
