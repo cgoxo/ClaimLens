@@ -201,3 +201,10 @@ def test_claim_level_larger_than_bills():
 def test_amount_string_not_a_number_is_left_out():
     s = settle(None, facts(5000, bill(line("A", 5000), line("B", "n/a"))), [])
     assert len(s.lines) == 1 and any("no amount" in n.text for n in s.notes)
+
+
+def test_age_from_text_with_units():
+    for text in ("45 years", "45 yrs", "45", "45Y"):
+        policy = PolicyFacts(co_pays=[CoPay(clause="5", page=1, quote="q", percent=10, applies="age_over", age=40)])
+        s = settle(policy, facts(1000, bill(line("Room", 1000)), age=text), [])
+        assert s.co_pay is not None and s.co_pay.amount == 100 and not any(n.affects_amount for n in s.notes), text

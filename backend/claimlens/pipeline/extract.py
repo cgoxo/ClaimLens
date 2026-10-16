@@ -105,3 +105,6 @@ def extract(ctx: Ctx) -> None:
         labelled_text(ctx.read, "claim", ctx.cards, ctx.skip_pages)))
     ctx.policy_facts = _ground_model(ctx, "policy", ai.extract_policy(
         labelled_text(ctx.read, "policy", ctx.cards, ctx.skip_pages)), ctx.rules_not_verified)
+    if ctx.policy_facts is not None and ctx.policy_facts.room_rent_limit_per_day is not None:
+        # the older room limit supplies the limit, so a room limit that failed proof is not a gap to report
+        ctx.rules_not_verified[:] = [r for r in ctx.rules_not_verified if r.get("rule") != "RoomLimit"]

@@ -1,5 +1,7 @@
 """Settlement: what the insurer pays, line by line, computed in code from the facts and findings."""
 
+import re
+
 from rapidfuzz import fuzz
 
 from claimlens.models import (Citation, ClaimFacts, Deduction, Finding, Note, PolicyFacts, Settlement,
@@ -10,9 +12,10 @@ from claimlens.pipeline.text import parse_money
 # Proportionate deduction scales these lines down; it never touches medicines, consumables or implants.
 PROPORTIONATE = ("doctor", "nursing", "surgery", "investigations")
 NEVER_PROPORTIONATE = ("medicines", "consumables", "implants")
+WHOLE_CLAIM_CODES = ("waiting_period", "initial_waiting_period")
 
 
-def _targets(facts: ClaimFacts | None) -> list[str]:
+def treatment_targets(facts: ClaimFacts | None) -> list[str]:
     if facts is None:
         return []
     targets = [str(facts.diagnosis.value)] if facts.diagnosis and facts.diagnosis.value else []
@@ -21,9 +24,9 @@ def _targets(facts: ClaimFacts | None) -> list[str]:
 
 def main_treatment_excluded(facts: ClaimFacts | None, findings: list[Finding]) -> Finding | None:
     """The finding that rules out the whole claim: a waiting period, or an exclusion of the main treatment."""
-    targets = _targets(facts)
+    targets = treatment_targets(facts)
     for finding in findings:
-        if finding.code == "waiting_period":
+        if finding.code in WHOLE_CLAIM_CODES:
             return finding
         if finding.code == "not_covered" and any(
                 fuzz.partial_ratio(finding.title.split(":")[0].lower(), t.lower()) >= 80 for t in targets):
@@ -95,7 +98,7 @@ def _apply_line_deductions(lines: list[SettlementLine], findings: list[Finding],
 
 
 def _sub_limit(policy: PolicyFacts, facts: ClaimFacts | None, amount: float, notes: list[Note]) -> Deduction | None:
-    targets = _targets(facts)
+    targets = treatment_targets(facts)
     for sub in policy.sub_limits:
         if not any(fuzz.partial_ratio(sub.applies_to.lower(), t.lower()) >= 80 for t in targets):
             continue
@@ -112,8 +115,14 @@ def _sub_limit(policy: PolicyFacts, facts: ClaimFacts | None, amount: float, not
     return None
 
 
+def _age(text) -> float | None:
+    """Years from text like "45", "45 years" or "45 yrs": the leading whole number."""
+    m = re.match(r"\s*(\d+)", str(text))
+    return float(m.group(1)) if m else None
+
+
 def _co_pay(policy: PolicyFacts, facts: ClaimFacts | None, amount: float, notes: list[Note]) -> Deduction | None:
-    age = parse_money(facts.patient_age.value) if facts and facts.patient_age else None
+    age = _age(facts.patient_age.value) if facts and facts.patient_age else None
     percent, reasons, cite = 0.0, [], None
     for cp in policy.co_pays:
         if cp.applies == "other":

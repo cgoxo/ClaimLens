@@ -8,7 +8,7 @@ from datetime import timedelta
 from claimlens.models import Citation, ClaimFacts, Finding, LineDeduction, PolicyFacts
 from claimlens.pipeline.context import Ctx
 from claimlens.pipeline.extract import labelled_text, locate
-from claimlens.pipeline.settlement import PROPORTIONATE
+from claimlens.pipeline.settlement import NEVER_PROPORTIONATE, PROPORTIONATE, treatment_targets
 from claimlens.pipeline.rules import icu_limit_rupees, is_non_payable, room_limit_rupees, rule_citation
 from claimlens.pipeline.text import months_between, normalise, parse_date, parse_money
 
@@ -61,8 +61,7 @@ def _waiting_periods(ctx: Ctx) -> list[Finding]:
     start, treated = policy_start(p), treated_date(f)
     if not (start and treated):
         return []
-    targets = [str(f.diagnosis.value)] if f.diagnosis and f.diagnosis.value else []
-    targets += [str(pr.name.value) for pr in f.procedures if pr.name.value]
+    targets = treatment_targets(f)
     out = []
     for n, wp in enumerate(p.waiting_periods, 1):
         if not any(fuzz.partial_ratio(wp.condition.lower(), t.lower()) >= 80 for t in targets):
@@ -75,6 +74,24 @@ def _waiting_periods(ctx: Ctx) -> list[Finding]:
                 wp.page, wp.quote, n=n, deductions=(d := _claim_deduction(f)),
                 amount=sum(x.amount for x in d)))
     return out
+
+
+def _initial_waiting(ctx: Ctx) -> list[Finding]:
+    """The first days of a policy pay nothing. (Pre-existing disease cannot be decided in code: no finding.)
+    The claim facts hold no accident flag, so the accident exception is not applied."""
+    f, rule = ctx.claim_facts, ctx.policy_facts.initial_waiting
+    start, treated = policy_start(ctx.policy_facts), treated_date(f)
+    if rule is None or not (start and treated):
+        return []
+    days = (treated - start).days
+    if days >= rule.days:
+        return []
+    deductions = _claim_deduction(f)
+    return [_finding("initial_waiting_period",
+                     f"Treatment is inside the {rule.days}-day initial waiting period"
+                     + (f" (clause {_clause_no(rule.clause) or rule.clause})" if rule.clause else ""),
+                     f"The policy started {start:%d-%b-%Y}; treatment on {treated:%d-%b-%Y} is only {days} days later.",
+                     rule.page, rule.quote, deductions=deductions, amount=sum(x.amount for x in deductions))]
 
 
 def _claim_deduction(f: ClaimFacts) -> list[LineDeduction]:
@@ -118,7 +135,7 @@ def _room_rent(ctx: Ctx) -> list[Finding]:
         taken = {(b, i) for b, i, _, _ in over}
         for b, i, line in _lines(f):
             amount = _money(line.amount)
-            if line.category in PROPORTIONATE and amount and (b, i) not in taken:
+            if line.category in PROPORTIONATE and line.category not in NEVER_PROPORTIONATE and amount and (b, i) not in taken:
                 deductions.append(LineDeduction(bill=b, line=i, amount=round(amount * ratio, 2)))
     total = sum(d.amount for d in deductions)
     names = [f.bills[b].line_items[i].desc for b, i, _, _ in over if b >= 0]
@@ -176,16 +193,22 @@ def _outside_window(ctx: Ctx) -> list[Finding]:
             continue
         early = w.pre_days is not None and when < admitted - timedelta(days=w.pre_days)
         late = w.post_days is not None and when > discharged + timedelta(days=w.post_days)
-        amount = _money(bill.total) or sum(_money(line.amount) or 0 for line in bill.line_items)
-        if not (early or late) or not amount:
+        amounts = [(i, _money(line.amount)) for i, line in enumerate(bill.line_items)]
+        amounts = [(i, a) for i, a in amounts if a]
+        if not (early or late):
+            continue
+        # the whole bill goes, line by line; a bill with only a total has just that to take
+        deductions = ([LineDeduction(bill=b, line=i, amount=a) for i, a in amounts] if amounts
+                      else [LineDeduction(bill=b, line=-1, amount=_money(bill.total) or 0)])
+        amount = sum(d.amount for d in deductions)
+        if not amount:
             continue
         side = (f"more than {w.pre_days} days before admission" if early
                 else f"more than {w.post_days} days after discharge")
         out.append(_finding("bill_outside_cover_window", f"Bill dated {when:%d-%b-%Y} is outside the cover window",
                             f"The bill is dated {side}: Rs {amount:,.0f} is not payable.",
                             cite.page, cite.quote, amount=amount, n=len(out) + 1,
-                            deductions=[LineDeduction(bill=b, line=-1, amount=amount)],
-                            items=[line.desc for line in bill.line_items]))
+                            deductions=deductions, items=[line.desc for line in bill.line_items]))
     return out
 
 
@@ -207,7 +230,7 @@ def _clause_no(clause: str) -> str:
 def check_coverage(ctx: Ctx) -> list[Finding]:
     if ctx.claim_facts is None or ctx.policy_facts is None:
         return []
-    derived = (_waiting_periods(ctx) + _room_rent(ctx) + _icu(ctx) + _non_payable(ctx)
+    derived = (_waiting_periods(ctx) + _initial_waiting(ctx) + _room_rent(ctx) + _icu(ctx) + _non_payable(ctx)
                + _outside_window(ctx))
     covered_clauses = {_clause_no(wp.clause) for wp in ctx.policy_facts.waiting_periods
                        for f in derived if f.code == "waiting_period" and wp.quote == f.citations[0].quote}
@@ -247,8 +270,8 @@ def check_coverage(ctx: Ctx) -> list[Finding]:
                 amount = whole or i.amount_not_payable
                 lines.append(line.desc)
             per_line[key] = per_line.get(key, 0) + amount
-            if key != (-1, -1) and _money(hit[2].amount):
-                per_line[key] = min(per_line[key], _money(hit[2].amount))
+            if hit is not None and (whole_amount := _money(hit[2].amount)):
+                per_line[key] = min(per_line[key], whole_amount)
         lines = list(dict.fromkeys(lines))
         deductions = [LineDeduction(bill=b, line=li, amount=a) for (b, li), a in per_line.items() if a]
         derived.append(_finding(verdict, f"{names}: {verdict.replace('_', ' ')}{clause}", first.reason,

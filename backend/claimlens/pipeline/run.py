@@ -130,6 +130,7 @@ def run_pipeline(case_id: str, deps) -> None:
 
         step = "SETTLEMENT"  # a bug in the settlement fails the case with this step name
         o = outcome(ctx.policy_facts, ctx.claim_facts, kept)
+        step = "FINISHING"  # past the settlement: later failures are not the settlement's
         report = dict(score=o.score, risk=o.risk, payable=o.payable, analysis=o, current=o,
                       rules_not_verified=ctx.rules_not_verified, summary=summarise(ctx, kept, outcome_text(o)),
                       dropped_findings=dropped, findings_count=len(kept))

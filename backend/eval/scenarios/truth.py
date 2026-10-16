@@ -22,7 +22,8 @@ SEVERITY = {"font_outlier": "critical", "hidden_text": "critical", "editing_tool
             "duplicate_page_image": "high", "incomplete_bill": "medium", "unreadable_file": "low",
             "room_days_exceed_stay": "high", "duplicate_charge": "medium", "charge_unrelated_to_treatment": "medium",
             "charge_unusual_for_treatment": "low", "bill_story_unavailable": "low", "icu_limit": "coverage",
-            "non_payable_items": "coverage", "bill_outside_cover_window": "coverage"}
+            "non_payable_items": "coverage", "bill_outside_cover_window": "coverage",
+            "initial_waiting_period": "coverage"}
 # what each bill line is, from its description (the AI stand-in "reads" this)
 CATEGORIES = {"Surgeon and OT charges": "surgery", "Anaesthesia": "doctor", "Consumables": "consumables",
               "Medicines": "medicines", "Lab tests": "investigations", "Nursing charges": "nursing"}

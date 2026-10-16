@@ -54,7 +54,11 @@ def recommend(findings: list[Finding], risk: str, settlement: Settlement, policy
         deductions = [x for line in settlement.lines for x in line.deductions] + settlement.claim_level
         deductions += [x for x in (settlement.sub_limit, settlement.deductible, settlement.co_pay,
                                    settlement.si_cap) if x]
-        reasons = [f"{_clean(x.reason)}: Rs {x.amount:,.0f} is not payable." for x in deductions]
+        reasons = []
+        if settlement.lines and sum(x.claimed for x in settlement.lines) > claimed + 1:
+            reasons.append(f"Bills total Rs {sum(x.claimed for x in settlement.lines):,.0f}; "
+                           f"capped at the claimed Rs {claimed:,.0f}.")
+        reasons += [f"{_clean(x.reason)}: Rs {x.amount:,.0f} is not payable." for x in deductions]
         return Recommendation(action="approve_part",
                               reasons=reasons or [f"Rs {claimed - payable:,.0f} of the claim is not payable."])
     return Recommendation(action="approve", reasons=["The claimed amount is payable in full."])

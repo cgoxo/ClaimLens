@@ -104,3 +104,16 @@ def test_reasons_strip_trailing_punctuation():
     whole = Deduction(amount=1000, reason="Waiting period.")
     r = recommend([], "low", _settlement(payable=0, whole=whole), POLICY, FACTS)
     assert r.reasons == ["The whole claim is excluded: Waiting period."]
+
+
+def test_approve_part_explains_bills_capped_at_claimed():
+    from claimlens.models import LineItem
+    from claimlens.pipeline.settlement import settle
+    facts = ClaimFacts(amount_claimed=_fact(8000), discharge_date=_fact("2026-01-05"), bills=[Bill(
+        page=1, kind="hospital", inpatient=True,
+        line_items=[LineItem(desc="Room", amount=_fact(6000)), LineItem(desc="Drugs", amount=_fact(4000))])])
+    s = settle(POLICY, facts, [])
+    s.payable = 7000.0
+    r = recommend([], "low", s, POLICY, facts)
+    assert r.action == "approve_part"
+    assert r.reasons[0] == "Bills total Rs 10,000; capped at the claimed Rs 8,000."

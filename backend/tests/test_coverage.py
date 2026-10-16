@@ -172,7 +172,7 @@ def test_pharmacy_after_post_window(ctx):
         Bill(page=6, kind="pharmacy", line_items=[_line("Tablets", 900)]),
     ]
     f = _only(ctx, "bill_outside_cover_window")
-    assert f.deductions == [LineDeduction(bill=0, line=-1, amount=3000)]
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=3000)]
 
 
 def test_not_covered_maps_to_line(tmp_path):
@@ -243,3 +243,55 @@ def test_coverage_item_with_icu_letters_is_not_skipped(tmp_path):
     c.policy_facts.icu_limit = Limit(clause="2.3", page=1, quote="ICU", amount=6000)
     c.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[_line("ICU stay", 24000, "icu", 2, 12000)])]
     assert _only(c, "not_covered").amount_not_payable == 900
+
+
+def _window_ctx(ctx, total):
+    ctx.policy_facts.window = Window(clause="5.1", page=3, quote="post-hospitalisation", pre_days=30, post_days=60)
+    ctx.claim_facts.bills = [Bill(page=4, kind="pharmacy", date=_fact("27-May-2026"),
+                                  line_items=[_line("Tablets", 3000), _line("Syrup", 2000)], total=_fact(total))]
+
+
+def _settled_window(ctx, total):
+    from claimlens.pipeline.settlement import settle
+    _window_ctx(ctx, total)
+    f = _only(ctx, "bill_outside_cover_window")
+    return f, settle(None, ctx.claim_facts, [f])
+
+
+def test_outside_window_discounted_total_removes_every_line(ctx):
+    f, s = _settled_window(ctx, 4500)
+    assert f.amount_not_payable == 5000
+    assert [x.payable for x in s.lines] == [0, 0] and s.notes == []
+
+
+def test_outside_window_taxed_total_removes_every_line_without_a_note(ctx):
+    f, s = _settled_window(ctx, 5500)
+    assert f.amount_not_payable == 5000
+    assert [x.payable for x in s.lines] == [0, 0] and not any(n.affects_amount for n in s.notes)
+
+
+def test_outside_window_bill_with_only_a_total_uses_the_total(ctx):
+    ctx.policy_facts.window = Window(clause="5.1", page=3, quote="post-hospitalisation", pre_days=30, post_days=60)
+    ctx.claim_facts.bills = [Bill(page=4, kind="pharmacy", date=_fact("27-May-2026"), total=_fact(3000))]
+    assert _only(ctx, "bill_outside_cover_window").deductions == [LineDeduction(bill=0, line=-1, amount=3000)]
+
+
+def _initial(ctx, days):
+    from claimlens.models import InitialWaiting
+    ctx.policy_facts.waiting_periods = []
+    ctx.policy_facts.initial_waiting = InitialWaiting(clause="3.1", page=2, quote="first 30 days", days=days)
+
+
+def test_initial_waiting_inside_period_excludes_the_claim(ctx):
+    from claimlens.pipeline.settlement import settle
+    _initial(ctx, 10000)
+    f = _only(ctx, "initial_waiting_period")
+    assert f.severity == "coverage" and f.citations[0].quote == "first 30 days"
+    assert f.deductions[0].bill == -1 and f.amount_not_payable == f.deductions[0].amount > 0
+    s = settle(ctx.policy_facts, ctx.claim_facts, [f])
+    assert s.payable == 0 and s.whole_claim is not None
+
+
+def test_initial_waiting_outside_period_changes_nothing(ctx):
+    _initial(ctx, 1)
+    assert not [f for f in check_coverage(ctx) if f.code == "initial_waiting_period"]
