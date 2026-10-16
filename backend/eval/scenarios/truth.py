@@ -35,6 +35,7 @@ class Truth:
     facts: ClaimFacts | None = None
     policy: PolicyFacts | None = None
     labels: dict = field(default_factory=dict)  # file stem -> (kind, quote)
+    story_verdicts: list = field(default_factory=list)  # StoryVerdict answers for the bill-against-story call
 
 
 def _fact(value, page, quote=None) -> Fact:

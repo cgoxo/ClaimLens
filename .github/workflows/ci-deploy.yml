@@ -86,7 +86,7 @@ jobs:
           gcloud run deploy "$SERVICE" --project "$PROJECT" --region "$REGION" \
             --image "$IMAGE:${GITHUB_SHA::7}" --service-account "$RUNTIME_SA" \
             --cpu 1 --memory 1Gi --timeout 1800 --no-cpu-throttling --min-instances 0 --max-instances 2 \
-            --set-env-vars "^##^APP_ENV=prod##STORAGE=gcs##DB=firestore##AI=vertex##OCR=docai##AUTH_MODE=firebase##GCP_PROJECT=${PROJECT}##BUCKET=${BUCKET}##FIRESTORE_DB=claimlens##GEMINI_MODEL=gemini-2.5-flash##VERTEX_LOCATION=global##DOCAI_LOCATION=us##DOCAI_PROCESSOR=${DOCAI_PROCESSOR}##JOBS=cloudtasks##TASKS_QUEUE=claimlens-jobs##TASKS_LOCATION=${REGION}##TASKS_SA=${TASKS_SA}##SERVICE_URL=${SERVICE_URL}"
+            --set-env-vars "^##^APP_ENV=prod##STORAGE=gcs##DB=firestore##AI=vertex##OCR=docai##AUTH_MODE=firebase##GCP_PROJECT=${PROJECT}##BUCKET=${BUCKET}##FIRESTORE_DB=claimlens##GEMINI_MODEL=gemini-2.5-flash##VERTEX_LOCATION=global##DOCAI_LOCATION=us##DOCAI_PROCESSOR=${DOCAI_PROCESSOR}##JOBS=cloudtasks##TASKS_QUEUE=claimlens-jobs##TASKS_LOCATION=${REGION}##TASKS_SA=${TASKS_SA}##SERVICE_URL=${SERVICE_URL}##BILL_STORY=on"
 
       - name: Smoke check
         run: |

@@ -1,7 +1,7 @@
 """An AI stand-in for the offline run: it 'reads' exactly the true facts, so any difference from the expected
 result is the product's logic, not the model's."""
 
-from claimlens.models import ClaimFacts, CoverageItem, DocLabel, Finding, PolicyFacts
+from claimlens.models import ClaimFacts, CoverageItem, DocLabel, Finding, PolicyFacts, StoryVerdict
 from eval.scenarios.truth import Truth
 
 
@@ -29,5 +29,8 @@ class TruthAi:
     def judge_coverage(self, policy_text: str, facts: ClaimFacts) -> list[CoverageItem]:
         return []  # waiting periods and room limits are worked out by code; no other exclusions in these policies
 
-    def summarise(self, findings: list[Finding]) -> str:
+    def judge_bill_story(self, story_text: str, items_json: str) -> list[StoryVerdict]:
+        return self.truth.story_verdicts
+
+    def summarise(self, findings: list[Finding], outcome: str = "") -> str:
         return f"{len(findings)} findings."
