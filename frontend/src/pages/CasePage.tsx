@@ -128,7 +128,7 @@ export default function CasePage() {
     const ready = data.status === "READY";
     const selected = ready ? findings.find((f) => f.id === selectedId) ?? null : null;
     const settlement = (data.current ?? data.analysis)?.settlement ?? null;
-    const mismatch =findings.some((f) => f.code === "policy_number_mismatch");
+    const mismatch = findings.some((f) => f.code === "policy_number_mismatch");
     const context = data.context && <CaseContext context={data.context} mismatch={mismatch} onOpen={openFact} />;
     body = ready ? (
       <div className="dossier">

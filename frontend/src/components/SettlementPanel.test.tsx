@@ -15,7 +15,7 @@ test("shows a deduction with its reason and amount, and its clause chip opens th
 test("shows the co-pay row, the payable total and the notes", () => {
   render(<SettlementPanel settlement={settlement} onOpenClause={vi.fn()} />);
   expect(screen.getByText("Co-pay 10%")).toBeInTheDocument();
-  expect(screen.getByRole("row", { name: /^Payable/ })).toHaveTextContent("₹27,000");
+  expect(screen.getByRole("row", { name: /^Payable/ })).toHaveTextContent("₹27,900");
   expect(screen.getByText("One bill has no date and was left out.")).toBeInTheDocument();
 });
 
@@ -27,6 +27,20 @@ test("shows a capped row when the bills come to more than was claimed", () => {
 });
 
 test("no capped row when the bills fit the claim", () => {
-  render(<SettlementPanel settlement={{ ...settlement, subtotal: 31000 }} onOpenClause={vi.fn()} />);
+  render(<SettlementPanel settlement={settlement} onOpenClause={vi.fn()} />);
+  expect(screen.queryByText("Capped at the claimed amount")).toBeNull();
+});
+
+test("no capped row for a whole-claim exclusion", () => {
+  const excluded = {
+    ...settlement, subtotal: 0, co_pay: null, payable: 0,
+    whole_claim: { amount: 31000, reason: "Excluded", finding_id: null, rule: null },
+  };
+  render(<SettlementPanel settlement={excluded} onOpenClause={vi.fn()} />);
+  expect(screen.queryByText("Capped at the claimed amount")).toBeNull();
+});
+
+test("no capped row when the claimed amount is unknown", () => {
+  render(<SettlementPanel settlement={{ ...settlement, claimed: null, subtotal: 0, co_pay: null, payable: null }} onOpenClause={vi.fn()} />);
   expect(screen.queryByText("Capped at the claimed amount")).toBeNull();
 });

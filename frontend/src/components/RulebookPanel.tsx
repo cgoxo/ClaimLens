@@ -22,7 +22,14 @@ function limit(r: Rule): string {
   const amount = num(r.amount);
   const percent = num(r.percent_of_si);
   const parts = [amount !== null ? money(amount) : null, percent !== null ? `${percent}% of the sum insured` : null];
-  return `${parts.filter(Boolean).join(" or ")} per day`;
+  const text = parts.filter(Boolean).join(" or ");
+  return text ? `${text} per day` : "Limit not stated";
+}
+
+function coPay(r: Rule): string {
+  if (r.applies === "age_over" && num(r.age) !== null) return `${r.percent}% if the insured is over ${r.age}`;
+  if (r.applies === "other") return `${r.percent}%${r.condition_text ? ` ${r.condition_text}` : ""}`;
+  return `${r.percent}%`;
 }
 
 const asList = (v: unknown): Rule[] => (Array.isArray(v) ? (v as Rule[]) : []);
@@ -31,12 +38,12 @@ const asRule = (v: unknown): Rule[] => (v && typeof v === "object" && !Array.isA
 export default function RulebookPanel({ policy, notVerified, onOpenClause }: Props) {
   const p = policy ?? {};
   const rows: { label: string; text: string; rule: Rule }[] = [
-    ...asList(p.co_pays).map((r) => ({ label: "Co-pay", text: `${r.percent}%${r.condition_text ? ` (${r.condition_text})` : ""}`, rule: r })),
+    ...asList(p.co_pays).map((r) => ({ label: "Co-pay", text: coPay(r), rule: r })),
     ...asRule(p.deductible).map((r) => ({ label: "Deductible", text: `${money(num(r.amount))} per ${r.per ?? "claim"}`, rule: r })),
     ...asRule(p.room_limit).map((r) => ({ label: "Room rent", text: limit(r), rule: r })),
     ...asRule(p.icu_limit).map((r) => ({ label: "ICU", text: limit(r), rule: r })),
     ...asRule(p.proportionate_deduction).map((r) => ({ label: "Proportionate deduction", text: "Other charges are cut in the same proportion as room rent", rule: r })),
-    ...asList(p.sub_limits).map((r) => ({ label: "Sub-limit", text: `${r.applies_to}: ${limit(r).replace(/ per day$/, "")} per ${r.per ?? "claim"}`, rule: r })),
+    ...asList(p.sub_limits).map((r) => ({ label: "Sub-limit", text: `${r.applies_to}: ${limit(r).replace(/ per day$/, "")}${num(r.amount) !== null || num(r.percent_of_si) !== null ? ` per ${r.per ?? "claim"}` : ""}`, rule: r })),
     ...asRule(p.initial_waiting).map((r) => ({ label: "Initial waiting", text: `${r.days} days`, rule: r })),
     ...asRule(p.pre_existing).map((r) => ({ label: "Pre-existing conditions", text: `${r.months} months`, rule: r })),
     ...asList(p.waiting_periods).map((r) => ({ label: "Waiting period", text: `${r.condition}: ${r.months} months`, rule: r })),
@@ -49,7 +56,7 @@ export default function RulebookPanel({ policy, notVerified, onOpenClause }: Pro
     ...asRule(p.window).map((r) => ({
       label: "Cover window",
       text: [num(r.pre_days) !== null ? `${r.pre_days} days before admission` : null, num(r.post_days) !== null ? `${r.post_days} days after discharge` : null]
-        .filter(Boolean).join(", "),
+        .filter(Boolean).join(", ") || "Not stated",
       rule: r,
     })),
   ];

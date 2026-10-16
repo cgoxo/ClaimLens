@@ -22,7 +22,8 @@ export default function SettlementPanel({ settlement: s, onOpenClause }: Props) 
   );
 
   const admissible = s.lines.reduce((sum, l) => sum + l.payable, 0) - s.claim_level.reduce((sum, d) => sum + d.amount, 0);
-  const capped = admissible - s.subtotal;
+  // the bills come to more than was claimed; not when the claim is excluded or the claimed amount is unknown
+  const capped = s.claimed != null && !s.whole_claim ? admissible - s.subtotal : 0;
 
   return (
     <div className="settlement">

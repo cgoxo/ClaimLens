@@ -11,15 +11,15 @@ export const settlement: Settlement = {
     },
     { bill: 0, line: 1, desc: "Surgeon and OT charges", category: "surgery", claimed: 22000, deductions: [], payable: 22000 },
   ],
-  claimed: 30000, whole_claim: null, claim_level: [], subtotal: 30000,
+  claimed: 31000, whole_claim: null, claim_level: [], subtotal: 31000,
   sub_limit: null, deductible: null,
-  co_pay: { amount: 3000, reason: "Co-pay 10%", finding_id: null, rule: null },
-  si_cap: null, payable: 27000,
+  co_pay: { amount: 3100, reason: "Co-pay 10%", finding_id: null, rule: null },
+  si_cap: null, payable: 27900,
   notes: [{ text: "One bill has no date and was left out.", affects_amount: false }],
 };
 
 export const outcome = (over: Partial<Outcome> = {}): Outcome => ({
-  score: 70, risk: "high", payable: 27000,
+  score: 70, risk: "high", payable: 27900,
   recommendation: { action: "approve_part", reasons: ["Room rent is above the limit."] },
   settlement, ...over,
 });

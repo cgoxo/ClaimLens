@@ -82,7 +82,7 @@ test("accept saves the review and shows who accepted", async () => {
 });
 
 describe("settlement and recommendation", () => {
-  const withOutcome: Case = { ...sampleCase, payable: 27000, analysis: outcome(), current: outcome(), rules_not_verified: [] };
+  const withOutcome: Case = { ...sampleCase, payable: 27900, analysis: outcome(), current: outcome(), rules_not_verified: [] };
 
   test("shows the badge, the open Settlement panel and the closed policy rules", async () => {
     setup({}, withOutcome);
@@ -107,7 +107,7 @@ describe("settlement and recommendation", () => {
   });
 
   test("after a review the page shows the new outcome", async () => {
-    const after = outcome({ score: 30, risk: "review", payable: 31000, recommendation: { action: "approve", reasons: [] } });
+    const after = outcome({ score: 30, risk: "review", payable: 28500, settlement: null, recommendation: { action: "approve", reasons: [] } });
     const client = setup({
       review: vi.fn(async (_i: string, fid: string) => ({
         ...withOutcome.findings.find((f) => f.id === fid)!,
@@ -118,7 +118,7 @@ describe("settlement and recommendation", () => {
     await screen.findAllByRole("article");
     await userEvent.click(within(card(/Amount in a different font/)).getByRole("button", { name: "Dismiss" }));
     expect(await screen.findByText("Approve")).toBeInTheDocument();
-    expect(screen.getByText("₹31,000")).toBeInTheDocument();
+    expect(screen.getByText("₹28,500")).toBeInTheDocument();
     expect(client.review).toHaveBeenCalled();
   });
 });
