@@ -17,6 +17,11 @@ returns must be found on the cited page, or the finding is dropped. The policy i
 rule is proved on its page; the item-by-item settlement and the recommendation are worked out in code, and are
 recalculated when a finding is dismissed or restored.
 
+**Chat:** on a ready case, the reviewer can ask questions in a Chat tab (optionally about a box selected on a page).
+Gemini answers using read-only tools over the case, and every quote it cites is checked against the page text before it
+is shown (answers with no proved citation are marked unverified). Changes it suggests (dismiss a finding, change a
+severity, add a finding, correct a fact) are only proposals: nothing changes until the reviewer clicks Apply.
+
 **Run locally:** `cd backend && make venv && make seed && make dev`, then open http://localhost:5173 and click
 **Try the sample claim**.
 
