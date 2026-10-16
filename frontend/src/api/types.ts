@@ -35,21 +35,90 @@ export interface Citation {
 }
 
 export interface Review {
-  action: "accept" | "dismiss";
+  action: "accept" | "dismiss" | "restore";
   note: string;
   by: string;
   at: string;
 }
 
+/** Rupees a finding takes off a bill line; bill/line -1 means the whole bill or the claim level. */
+export interface LineDeduction {
+  bill: number;
+  line: number;
+  amount: number;
+}
+
+export interface Deduction {
+  amount: number;
+  reason: string;
+  finding_id: string | null;
+  rule: Citation | null;
+}
+
+export type BillCategory = "room" | "icu" | "surgery" | "doctor" | "nursing" | "investigations" | "medicines"
+  | "consumables" | "implants" | "ambulance" | "other";
+
+export interface SettlementLine {
+  bill: number;
+  line: number;
+  desc: string;
+  category: BillCategory;
+  claimed: number;
+  deductions: Deduction[];
+  payable: number;
+}
+
+export interface SettlementNote {
+  text: string;
+  affects_amount: boolean;
+}
+
+export interface Settlement {
+  lines: SettlementLine[];
+  claimed: number | null;
+  whole_claim: Deduction | null;
+  claim_level: Deduction[];
+  subtotal: number;
+  sub_limit: Deduction | null;
+  deductible: Deduction | null;
+  co_pay: Deduction | null;
+  si_cap: Deduction | null;
+  payable: number | null;
+  notes: SettlementNote[];
+}
+
+export type Action = "investigate" | "query" | "not_payable" | "approve_part" | "approve";
+
+export interface Recommendation {
+  action: Action;
+  reasons: string[];
+}
+
+export interface Outcome {
+  score: number;
+  risk: Risk;
+  payable: number | null;
+  recommendation: Recommendation | null;
+  settlement: Settlement | null;
+}
+
+export interface RuleNotVerified {
+  rule: string;
+  clause: string;
+  page: number;
+  quote: string;
+}
+
 export interface Finding {
   id: string;
-  check: "tamper" | "story" | "duplicate" | "cards" | "coverage";
+  check: "tamper" | "story" | "duplicate" | "cards" | "coverage" | "bill_story";
   code: string;
   severity: Severity;
   title: string;
   detail: string;
   citations: Citation[];
   amount_not_payable: number;
+  deductions?: LineDeduction[];
   verified: boolean;
   review: Review | null;
 }
@@ -108,6 +177,11 @@ export interface Case {
   findings_count: number | null;
   findings: Finding[];
   pages: PageMeta[];
+  /** what the first run decided; null on cases analysed before the rulebook */
+  analysis?: Outcome | null;
+  /** after the reviewer's accepts and dismissals */
+  current?: Outcome | null;
+  rules_not_verified?: RuleNotVerified[];
 }
 
 export interface CaseSummary {

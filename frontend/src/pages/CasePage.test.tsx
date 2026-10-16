@@ -4,6 +4,7 @@ import { ApiError } from "../api/client";
 import type { Case } from "../api/types";
 import { toPercentBox } from "../lib/highlight";
 import { renderPage } from "../test/auth";
+import { outcome } from "../test/outcome";
 import { sampleCase } from "../test/sampleCase";
 import CasePage from "./CasePage";
 
@@ -78,6 +79,48 @@ test("accept saves the review and shows who accepted", async () => {
   await userEvent.click(target.getByRole("button", { name: "Accept" }));
   expect(client.review).toHaveBeenCalledWith("c1", "font_outlier-claim-3-1", "accept", "");
   expect(await target.findByText(/Accepted by a@x.com/)).toBeInTheDocument();
+});
+
+describe("settlement and recommendation", () => {
+  const withOutcome: Case = { ...sampleCase, payable: 27000, analysis: outcome(), current: outcome(), rules_not_verified: [] };
+
+  test("shows the badge, the open Settlement panel and the closed policy rules", async () => {
+    setup({}, withOutcome);
+    expect(await screen.findByText("Approve in part")).toBeInTheDocument();
+    const settlementPanel = screen.getByText("Settlement").closest("details")!;
+    expect(settlementPanel).toHaveAttribute("open");
+    expect(screen.getByText("Policy rules").closest("details")).not.toHaveAttribute("open");
+    expect(within(settlementPanel).getByText("Room rent above the ₹3,000/day limit")).toBeInTheDocument();
+  });
+
+  test("a clause chip opens the clause in the viewer", async () => {
+    setup({}, withOutcome);
+    await userEvent.click(await screen.findByRole("button", { name: "policy p.2" }));
+    expect(screen.getByText(/Quoted text:/)).toBeInTheDocument();
+  });
+
+  test("an older case shows no recommendation or settlement", async () => {
+    setup({}, { ...sampleCase, analysis: null, current: { ...outcome(), recommendation: null, settlement: null } });
+    await screen.findAllByRole("article");
+    expect(screen.queryByText("Settlement")).toBeNull();
+    expect(screen.queryByText("Approve in part")).toBeNull();
+  });
+
+  test("after a review the page shows the new outcome", async () => {
+    const after = outcome({ score: 30, risk: "review", payable: 31000, recommendation: { action: "approve", reasons: [] } });
+    const client = setup({
+      review: vi.fn(async (_i: string, fid: string) => ({
+        ...withOutcome.findings.find((f) => f.id === fid)!,
+        review: { action: "dismiss", note: "", by: "a@x.com", at: "2026-10-10T10:00:00Z" },
+        current: after,
+      })),
+    }, withOutcome);
+    await screen.findAllByRole("article");
+    await userEvent.click(within(card(/Amount in a different font/)).getByRole("button", { name: "Dismiss" }));
+    expect(await screen.findByText("Approve")).toBeInTheDocument();
+    expect(screen.getByText("₹31,000")).toBeInTheDocument();
+    expect(client.review).toHaveBeenCalled();
+  });
 });
 
 test("a failed review reverts and shows an error", async () => {

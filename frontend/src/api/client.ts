@@ -1,4 +1,4 @@
-import type { CardSpec, Case, CaseSummary, Finding, Status } from "./types";
+import type { CardSpec, Case, CaseSummary, Finding, Outcome, Status } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, public detail: string) {
@@ -67,8 +67,8 @@ export function createClient(getHeaders: () => Promise<Headers>, onUnauthorized:
         { method: "POST" });
     },
 
-    review(id: string, fid: string, action: "accept" | "dismiss", note = "") {
-      return getJson<Finding>(`/api/cases/${encodeURIComponent(id)}/findings/${encodeURIComponent(fid)}/review`, {
+    review(id: string, fid: string, action: "accept" | "dismiss" | "restore", note = "") {
+      return getJson<Finding & { current?: Outcome | null }>(`/api/cases/${encodeURIComponent(id)}/findings/${encodeURIComponent(fid)}/review`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, note }),

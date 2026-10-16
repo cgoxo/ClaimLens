@@ -7,7 +7,7 @@ interface Props {
   number: number;
   selected: boolean;
   onSelect(): void;
-  onReview(action: "accept" | "dismiss", note: string): Promise<Finding>;
+  onReview(action: "accept" | "dismiss" | "restore", note: string): Promise<Finding>;
 }
 
 const money = (n: number) => `₹${n.toLocaleString("en-IN")}`;
@@ -18,7 +18,7 @@ export default function FindingCard({ finding, number, selected, onSelect, onRev
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function act(action: "accept" | "dismiss") {
+  async function act(action: "accept" | "dismiss" | "restore") {
     const before = review;
     setSaving(true);
     setError(null);
@@ -50,8 +50,11 @@ export default function FindingCard({ finding, number, selected, onSelect, onRev
         </div>
         {review ? (
           <p className={`review-note review-${review.action}`}>
-            {review.action === "accept" ? "Accepted" : "Dismissed"} by {review.by}
+            {review.action === "dismiss" ? "Dismissed" : "Accepted"} by {review.by}
             {review.note && <> · “{review.note}”</>}
+            {review.action === "dismiss" && (
+              <> <button className="btn btn-quiet" disabled={saving} onClick={() => void act("restore")}>Restore</button></>
+            )}
           </p>
         ) : selected && (
           <div className="finding-actions">
