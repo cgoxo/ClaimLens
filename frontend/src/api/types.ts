@@ -200,6 +200,16 @@ export interface CaseSummary {
   unseen: boolean;
 }
 
+/** One saved state of a finding, from GET …/findings/{fid}/versions. */
+export interface FindingVersion {
+  version: number;
+  action: string;
+  by: string;
+  at: string;
+  note: string;
+  finding: Finding;
+}
+
 // --- chat ---
 
 export interface Box {

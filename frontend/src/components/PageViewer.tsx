@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Client } from "../api/client";
-import type { CaseCard, Citation, PageMeta } from "../api/types";
+import type { BBox, Box, CaseCard, Citation, PageMeta } from "../api/types";
 import { toPercentBox } from "../lib/highlight";
 
 interface Props {
@@ -14,7 +14,13 @@ interface Props {
   /** bumps on every selection, so re-selecting the same finding still returns to its page */
   selectionKey?: number;
   client: Client;
+  /** when given, the viewer offers "Ask about an area"; called with a box in page points */
+  onSelectArea?(box: Box): void;
 }
+
+/** A drag shorter than this many screen pixels (either way) is a stray click, not a selection. */
+const MIN_DRAG_PX = 8;
+type Drag = { x0: number; y0: number; x1: number; y1: number };
 
 const DOCS = [["claim", "Claim"], ["policy", "Policy"]] as const;
 
@@ -31,12 +37,24 @@ function groups(pages: PageMeta[], cards: CaseCard[], doc: string): [string, Pag
   return out;
 }
 
-export default function PageViewer({ caseId, pages, cards = [], selected, selectedNumber, selectedDetail, selectionKey = 0, client }: Props) {
+export default function PageViewer({ caseId, pages, cards = [], selected, selectedNumber, selectedDetail, selectionKey = 0, client, onSelectArea }: Props) {
   const [doc, setDoc] = useState(selected?.doc ?? "claim");
   const [page, setPage] = useState(selected?.page ?? 1);
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [selecting, setSelecting] = useState(false);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setSelecting(false); setDrag(null); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selecting]);
 
   useEffect(() => {
     if (selected) {
@@ -59,6 +77,41 @@ export default function PageViewer({ caseId, pages, cards = [], selected, select
     );
     return () => { alive = false; };
   }, [caseId, doc, page, meta, client, attempt]);
+
+  // changing page or document abandons a half-made selection
+  useEffect(() => setDrag(null), [doc, page]);
+
+  const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
+  const imageRect = (fallback: Element) => (imgRef.current ?? fallback).getBoundingClientRect();
+  /** pointer position in pixels from the page image's corner, kept inside the image */
+  function local(e: React.PointerEvent<HTMLDivElement>) {
+    const r = imageRect(e.currentTarget);
+    return { x: clamp(e.clientX - r.left, r.width), y: clamp(e.clientY - r.top, r.height) };
+  }
+  function dragStart(e: React.PointerEvent<HTMLDivElement>) {
+    const { x, y } = local(e);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setDrag({ x0: x, y0: y, x1: x, y1: y });
+  }
+  function dragMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!drag) return;
+    const { x, y } = local(e);
+    setDrag({ ...drag, x1: x, y1: y });
+  }
+  function dragEnd(e: React.PointerEvent<HTMLDivElement>) {
+    if (!drag || !meta) return;
+    const { x, y } = local(e);
+    const d = { ...drag, x1: x, y1: y };
+    setDrag(null);
+    const r = imageRect(e.currentTarget);
+    if (Math.abs(d.x1 - d.x0) < MIN_DRAG_PX || Math.abs(d.y1 - d.y0) < MIN_DRAG_PX || !r.width || !r.height) return;
+    // pixels on screen to points on the page
+    const sx = meta.width / r.width;
+    const sy = meta.height / r.height;
+    const bbox: BBox = [Math.min(d.x0, d.x1) * sx, Math.min(d.y0, d.y1) * sy, Math.max(d.x0, d.x1) * sx, Math.max(d.y0, d.y1) * sy];
+    setSelecting(false);
+    onSelectArea?.({ doc, page, bbox });
+  }
 
   const here = selected && selected.doc === doc && selected.page === page ? selected : null;
   const box = here && here.source !== "metadata" && here.bbox && meta ? toPercentBox(here.bbox, meta.width, meta.height) : null;
@@ -98,6 +151,16 @@ export default function PageViewer({ caseId, pages, cards = [], selected, select
         </div>
       )}
 
+      {onSelectArea && meta && meta.kind !== "unreadable" && (
+        <div className="viewer-tools">
+          <button type="button" className="btn btn-quiet" aria-pressed={selecting}
+            onClick={() => { setSelecting((v) => !v); setDrag(null); }}>
+            {selecting ? "Cancel" : "Ask about an area"}
+          </button>
+          {selecting && <span className="muted small">Drag a box on the page. Esc to cancel.</span>}
+        </div>
+      )}
+
       <div className="sheet-frame">
         {!meta ? (
           <p className="page-empty">No pages.</p>
@@ -114,7 +177,18 @@ export default function PageViewer({ caseId, pages, cards = [], selected, select
             // fit the whole page in the window, so the marker is never scrolled out of view
             width: `min(100%, calc((100vh - 170px) * ${meta.width / meta.height}))`,
           }}>
-            {src ? <img src={src} alt={`${doc} page ${page}`} /> : <div className="sheet-loading" aria-hidden="true" />}
+            {src ? <img ref={imgRef} src={src} alt={`${doc} page ${page}`} /> : <div className="sheet-loading" aria-hidden="true" />}
+            {selecting && (
+              <div data-testid="select-layer" className="select-layer" onPointerDown={dragStart}
+                onPointerMove={dragMove} onPointerUp={dragEnd} onPointerCancel={() => setDrag(null)}>
+                {drag && (
+                  <div data-testid="drag-box" className="marker marker-dashed" style={{
+                    left: Math.min(drag.x0, drag.x1), top: Math.min(drag.y0, drag.y1),
+                    width: Math.abs(drag.x1 - drag.x0), height: Math.abs(drag.y1 - drag.y0),
+                  }} />
+                )}
+              </div>
+            )}
             {box && (
               <div data-testid="marker" className={`marker${here?.source === "hidden_layer" ? " marker-dashed" : ""}`}
                 style={{ left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%` }}>

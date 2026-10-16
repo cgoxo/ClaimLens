@@ -212,6 +212,9 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
   animation: mark-in 260ms ease-out;
 }
 .marker-dashed { border-style: dashed; }
+.viewer-tools { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.select-layer { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+.history-list { margin: 6px 0 0; padding-left: 20px; }
 .marker-tag {
   position: absolute; top: -2px; left: -2px; transform: translate(-100%, -100%);
   background: var(--stamp-red); color: #fff; font-size: 11px; padding: 1px 5px;

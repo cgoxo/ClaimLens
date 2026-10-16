@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Citation, Finding, Outcome } from "../api/types";
+import type { Box, Citation, Finding, Outcome } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import AppHeader from "../components/AppHeader";
 import CaseContext from "../components/CaseContext";
@@ -28,6 +28,7 @@ export default function CasePage() {
   const [pinned, setPinned] = useState<Citation | null>(null);
   const [leftTab, setLeftTab] = useState<"findings" | "chat">("findings");
   const [chatOff, setChatOff] = useState(false);
+  const [areaBox, setAreaBox] = useState<Box | null>(null);
   const tab = chatOff ? "findings" : leftTab;
   const openFact = (c: Citation) => { setPinned(c); setSelectionKey((k) => k + 1); };
 
@@ -92,11 +93,14 @@ export default function CasePage() {
     }
   };
 
-  const viewer = (selected: Finding | null) => data && (
+  const selectArea = (box: Box) => { setAreaBox(box); setLeftTab("chat"); };
+
+  const viewer = (selected: Finding | null, canAsk = false) => data && (
     <PageViewer caseId={data.id} pages={data.pages} cards={data.cards} client={client}
       selected={pinned ?? selected?.citations[0] ?? null} selectionKey={selectionKey}
       selectedNumber={!pinned && selected ? findings.indexOf(selected) + 1 : null}
-      selectedDetail={pinned ? pinned.quote : selected?.detail ?? ""} />
+      selectedDetail={pinned ? pinned.quote : selected?.detail ?? ""}
+      onSelectArea={canAsk && !chatOff ? selectArea : undefined} />
   );
 
   let body;
@@ -192,12 +196,13 @@ export default function CasePage() {
             ))}
           </div>
           <ChatPanel caseId={data.id} client={client} findings={findings} onOpenCitation={openFact}
-            onOutcome={(c) => void applied(c)} pendingSelection={null} onClearSelection={() => {}}
+            onOutcome={(c) => void applied(c)} pendingSelection={areaBox} onClearSelection={() => setAreaBox(null)}
             hidden={tab !== "chat"} onUnavailable={() => setChatOff(true)} />
           {tab === "findings" && (
             <>
               <p className="hint muted">Select a finding to see it on the page. <kbd>j</kbd> / <kbd>k</kbd> to move.</p>
-              <FindingList findings={findings} selectedId={selectedId} onSelect={(f) => { setPinned(null); setSelectedId(f.id); setSelectionKey((k) => k + 1); }} onReview={review} />
+              <FindingList findings={findings} selectedId={selectedId} onSelect={(f) => { setPinned(null); setSelectedId(f.id); setSelectionKey((k) => k + 1); }} onReview={review}
+                loadVersions={(f) => client.versions(id, f.id)} />
               {data.dropped_findings.length > 0 && (
                 <details className="dropped">
                   <summary>Not proven ({data.dropped_findings.length})</summary>
@@ -208,7 +213,7 @@ export default function CasePage() {
           )}
         </section>
         <section className="dossier-right" aria-label="Document viewer">
-          {viewer(selected)}
+          {viewer(selected, true)}
         </section>
       </div>
     ) : (

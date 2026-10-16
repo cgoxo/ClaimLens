@@ -1,4 +1,4 @@
-import type { Box, CardSpec, Case, CaseSummary, ChatMessage, ChatState, ChatThread, Finding, Outcome, Proposal, Status } from "./types";
+import type { Box, CardSpec, Case, CaseSummary, ChatMessage, ChatState, ChatThread, Finding, FindingVersion, Outcome, Proposal, Status } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, public detail: string) {
@@ -74,6 +74,9 @@ export function createClient(getHeaders: () => Promise<Headers>, onUnauthorized:
         body: JSON.stringify({ action, note }),
       });
     },
+
+    versions: (id: string, fid: string) =>
+      getJson<FindingVersion[]>(`/api/cases/${encodeURIComponent(id)}/findings/${encodeURIComponent(fid)}/versions`),
 
     getChat: (id: string) => getJson<ChatState>(`/api/cases/${encodeURIComponent(id)}/chat`),
 
