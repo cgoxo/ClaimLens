@@ -9,11 +9,18 @@ from PIL import Image
 
 from claimlens.models import Case, Finding, PageInfo
 from claimlens.pipeline.context import Ctx
-from claimlens.pipeline.forensics.base import field_score, safe_heatmap
-from claimlens.pipeline.forensics.chars import CHARS
-from claimlens.pipeline.forensics.ela import ELA
-from claimlens.pipeline.forensics.image import load_image
 from claimlens.pipeline.read import DPI
+
+# the pixel detectors need numpy and OpenCV, which the deployed image leaves out (the "forensics" extra):
+# without them check_region says so instead of the app failing to start
+try:
+    from claimlens.pipeline.forensics.base import field_score, safe_heatmap
+    from claimlens.pipeline.forensics.chars import CHARS
+    from claimlens.pipeline.forensics.ela import ELA
+    from claimlens.pipeline.forensics.image import load_image
+    FORENSICS = True
+except ImportError:
+    FORENSICS = False
 
 log = logging.getLogger(__name__)
 
@@ -209,6 +216,8 @@ def _check_region(args, deps, case, ctx) -> dict:
     p = _page(ctx, args["doc"], int(args["page"]))
     if p.kind not in PHOTO_KINDS:
         return {"error": "only for photo or scanned pages"}
+    if not FORENSICS:
+        return {"error": "photo checks aren't available on this server"}
     box = _bbox(args["bbox"])
     overlap = (max(box[0], 0), max(box[1], 0), min(box[2], p.width), min(box[3], p.height))
     if overlap[2] <= overlap[0] or overlap[3] <= overlap[1] or \
