@@ -30,7 +30,7 @@ def test_tool_then_final_answer_with_valid_citation(tmp_path):
     deps, case = _setup(tmp_path, [ToolCall("search_text", {"query": "policy"}), _final(citations=[GOOD_QUOTE])])
     msg = _ask(deps, case)
     assert msg.role == "assistant" and msg.verified and len(msg.citations) == 1
-    assert msg.tool_calls == [{"name": "search_text", "args": {"query": "policy"}}]
+    assert msg.tool_calls == [{"name": "search_text", "args": '{"query": "policy"}'}]
     assert msg.text == "Because."
 
 
@@ -40,7 +40,7 @@ def test_made_up_citation_dropped_and_unverified(tmp_path):
     msg = _ask(deps, case)
     assert msg.citations == [] and not msg.verified
     deps, case = _setup(tmp_path / "b", [_final(citations=[])])
-    assert _ask(deps, case).verified
+    assert not _ask(deps, case).verified
 
 
 def test_tool_limit_forces_final(tmp_path):
@@ -137,3 +137,33 @@ def test_document_injection_cannot_apply(tmp_path):
     assert len(msg.proposals) == 1 and msg.proposals[0].status == "pending"
     assert deps.db.get_findings("c1") == before
     assert deps.db.get_case("c1").context == case.context
+
+
+def test_factual_answer_without_citation_is_unverified(tmp_path):
+    deps, case = _setup(tmp_path, [_final("The bill is Rs 18,450.")])
+    assert not _ask(deps, case).verified
+
+
+def test_proposal_only_answer_without_digits_is_verified(tmp_path):
+    deps, case = _setup(tmp_path, [])
+    fid = next(f for f in deps.db.get_findings("c1") if f.code == "editing_tool").id
+    prop = {"type": "review_finding", "finding_id": fid, "action": "dismiss"}
+    deps.chat_ai = FakeChat([_final("I suggest dismissing it.", proposals=[prop])])
+    msg = _ask(deps, case)
+    assert len(msg.proposals) == 1 and msg.verified
+    deps.chat_ai = FakeChat([_final("I suggest dismissing finding 3.", proposals=[prop])])
+    assert not _ask(deps, case).verified
+
+
+def test_failed_finish_is_unverified(tmp_path):
+    deps, case = _setup(tmp_path, [_final("")])
+    msg = _ask(deps, case)
+    assert msg.text == FAILED and not msg.verified
+
+
+def test_nested_array_tool_args_stored_as_string(tmp_path):
+    args = {"bbox": [[1, 2], [3, 4]], "query": "x" * 5000}
+    deps, case = _setup(tmp_path, [ToolCall("search_text", args), _final()])
+    call = _ask(deps, case).tool_calls[0]
+    assert call["name"] == "search_text" and isinstance(call["args"], str) and len(call["args"]) == 2000
+    assert call["args"].startswith('{"bbox": [[1, 2], [3, 4]]')
