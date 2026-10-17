@@ -22,6 +22,7 @@ dependencies = [
   "google-cloud-documentai>=2.29",
   "google-cloud-tasks>=2.16",
   "firebase-admin>=6.5",
+  "pillow>=10",  # chat view_region crops page images
 ]
 
 [project.optional-dependencies]
