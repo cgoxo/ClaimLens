@@ -38,6 +38,14 @@ def _add_finding(deps, case: Case, p: Proposal, by: str) -> Outcome | None:
     return recalculate(deps, case.id)
 
 
+def _same_subject(old: Finding, new: Finding) -> bool:
+    """Same finding after a re-run: its first citation (doc, page, quote) is unchanged."""
+    def key(f: Finding):
+        c = f.citations[0] if f.citations else None
+        return (c.doc, c.page, c.quote) if c else None
+    return key(old) == key(new)
+
+
 def _correct_fact(deps, case: Case, p: Proposal, message_id: str, by: str) -> Outcome | None:
     """Compute everything first; write context, corrections, findings and versions only at the end."""
     found = resolve_fact(case, p.path or "")
@@ -62,13 +70,25 @@ def _correct_fact(deps, case: Case, p: Proposal, message_id: str, by: str) -> Ou
     merged: list[Finding] = []
     versions: list[tuple[Finding, str]] = []  # (finding as saved, action)
     needs_first: list[Finding] = []  # old findings with no version 1 yet
+    replacements: list[Finding] = []  # re-run findings whose subject differs from the old one with the same id
+    seen_new: set[str] = set()
     for f in old:
         if not is_owned(f):
             merged.append(f)
             continue
-        if f.id in new:
-            updated = new[f.id].model_copy(update={"review": f.review})
+        if f.id in new and _same_subject(f, new[f.id]):
+            carry = {"review": f.review}
+            latest = max(deps.db.get_finding_versions(case.id, f.id), key=lambda v: v["version"], default=None)
+            if latest and latest["action"] == "severity":
+                carry["severity"] = f.severity  # the reviewer's severity survives the re-run
+            updated = new[f.id].model_copy(update=carry)
             action = "restored_by_correction" if f.removed else "rechecked" if updated != f else None
+        elif f.id in new:
+            # same id but a different subject (ids shift with position): the old one is gone, a new one appears
+            updated = f if f.removed else f.model_copy(update={"removed": True})
+            action = None if f.removed else "removed_by_correction"
+            replacements.append(new[f.id].model_copy(update={"id": f"{f.id}-{uuid.uuid4().hex[:6]}"}))
+            seen_new.add(f.id)
         else:
             updated = f if f.removed else f.model_copy(update={"removed": True})
             action = None if f.removed else "removed_by_correction"
@@ -78,7 +98,7 @@ def _correct_fact(deps, case: Case, p: Proposal, message_id: str, by: str) -> Ou
             if not deps.db.get_finding_versions(case.id, f.id):
                 needs_first.append(f)
     seen = {f.id for f in old}
-    added = [f for fid, f in new.items() if fid not in seen]
+    added = [f for fid, f in new.items() if fid not in seen and fid not in seen_new] + replacements
     merged += added
 
     outcome, fields = compute_outcome(case, context, merged)

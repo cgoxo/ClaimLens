@@ -254,3 +254,54 @@ def test_stale_set_severity_refused(tmp_path):
     stale, current = apply(deps, deps.db.get_case("c1"), p, "m1", BY)
     assert stale.status == "stale" and current is None
     assert _by_code(deps, "name_mismatch").severity == "low"
+
+
+def _rerun(monkeypatch, make):
+    """Make the correction's re-run produce exactly the findings `make()` returns."""
+    monkeypatch.setattr("claimlens.chat.apply.recheck", lambda ctx: make())
+
+
+def _story(fid, page, quote, severity="high"):
+    from claimlens.models import Citation, Finding
+    return Finding(id=fid, check="story", code="inpatient_outside_stay", severity=severity, title=fid,
+                   citations=[Citation(doc="claim", page=page, quote=quote)])
+
+
+def _seed_story(deps, *findings):
+    deps.db.put_findings("c1", [f for f in deps.db.get_findings("c1") if f.code != "inpatient_outside_stay"]
+                         + list(findings))
+
+
+def test_correction_does_not_move_review_to_a_different_finding(tmp_path, monkeypatch):
+    deps, case = _setup(tmp_path)
+    _seed_story(deps, _story("oos-1", 1, "bill one"), _story("oos-2", 2, "bill two"))
+    record_review(deps, case, "oos-1", "dismiss", "", BY)
+    # correcting bill one removes its finding; bill two's finding now sits under the first id
+    _rerun(monkeypatch, lambda: [_story("oos-1", 2, "bill two")])
+    _apply(deps, case, type="correct_fact", path="claim.bills[0].total", value=1.0, evidence=EVIDENCE)
+    after = deps.db.get_findings("c1")
+    old = next(f for f in after if f.id == "oos-1")
+    assert old.removed and old.review is not None  # the dismissal stays with the removed finding
+    moved = [f for f in after if f.id.startswith("oos-1-")]
+    assert len(moved) == 1 and moved[0].review is None and not moved[0].removed
+    assert deps.db.get_finding_versions("c1", "oos-1")[-1]["action"] == "removed_by_correction"
+    assert [v["action"] for v in deps.db.get_finding_versions("c1", moved[0].id)] == ["added_by_correction"]
+
+
+def test_correction_keeps_review_when_citation_unchanged(tmp_path, monkeypatch):
+    deps, case = _setup(tmp_path)
+    _seed_story(deps, _story("oos-1", 1, "bill one"))
+    record_review(deps, case, "oos-1", "dismiss", "", BY)
+    _rerun(monkeypatch, lambda: [_story("oos-1", 1, "bill one")])
+    _apply(deps, case, type="correct_fact", path="claim.bills[0].total", value=1.0, evidence=EVIDENCE)
+    assert _by_code(deps, "inpatient_outside_stay").review.action == "dismiss"
+
+
+def test_correction_keeps_reviewer_severity(tmp_path, monkeypatch):
+    deps, case = _setup(tmp_path)
+    _seed_story(deps, _story("oos-1", 1, "bill one"))
+    p, _ = _apply(deps, case, type="set_severity", finding_id="oos-1", severity="low")
+    assert p.status == "applied", p.error
+    _rerun(monkeypatch, lambda: [_story("oos-1", 1, "bill one", severity="high")])
+    _apply(deps, case, type="correct_fact", path="claim.bills[0].total", value=1.0, evidence=EVIDENCE)
+    assert _by_code(deps, "inpatient_outside_stay").severity == "low"
