@@ -47,7 +47,7 @@ export default function CaseContext({ context, mismatch, onOpen }: Props) {
     return (
       <Row label={label} warn={warn}>
         {f && value !== null ? (
-          <><span>{value}</span> <PageLink label={label} doc={doc} page={f.page} quote={f.quote} bbox={f.bbox} onOpen={onOpen} /></>
+          <><span>{value}</span>{f.source === "reviewer" && <> <span className="chip badge-corrected">corrected by reviewer</span></>} <PageLink label={label} doc={doc} page={f.page} quote={f.quote} bbox={f.bbox} onOpen={onOpen} /></>
         ) : null}
       </Row>
     );

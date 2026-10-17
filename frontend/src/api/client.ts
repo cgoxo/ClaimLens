@@ -1,4 +1,4 @@
-import type { CardSpec, Case, CaseSummary, Finding, Outcome, Status } from "./types";
+import type { Box, CardSpec, Case, CaseSummary, ChatMessage, ChatState, ChatThread, Finding, FindingVersion, Outcome, Proposal, Status } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, public detail: string) {
@@ -74,6 +74,25 @@ export function createClient(getHeaders: () => Promise<Headers>, onUnauthorized:
         body: JSON.stringify({ action, note }),
       });
     },
+
+    versions: (id: string, fid: string) =>
+      getJson<FindingVersion[]>(`/api/cases/${encodeURIComponent(id)}/findings/${encodeURIComponent(fid)}/versions`),
+
+    getChat: (id: string) => getJson<ChatState>(`/api/cases/${encodeURIComponent(id)}/chat`),
+
+    ask(id: string, text: string, selection?: Box | null) {
+      return getJson<ChatMessage>(`/api/cases/${encodeURIComponent(id)}/chat/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(selection ? { text, selection } : { text }),
+      });
+    },
+
+    newChat: (id: string) => getJson<ChatThread>(`/api/cases/${encodeURIComponent(id)}/chat/new`, { method: "POST" }),
+
+    decide: (id: string, pid: string, decision: "apply" | "ignore") =>
+      getJson<{ proposal: Proposal; current: Outcome | null }>(
+        `/api/cases/${encodeURIComponent(id)}/chat/proposals/${encodeURIComponent(pid)}/${decision}`, { method: "POST" }),
 
     /** Page images need the auth header, so they are fetched and shown as object URLs. */
     pageImageUrl(id: string, doc: string, n: number): Promise<string> {

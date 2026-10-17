@@ -122,6 +122,8 @@ export interface Finding {
   items: string[];
   verified: boolean;
   review: Review | null;
+  /** no longer produced after a fact correction: never counts, hidden in the UI */
+  removed?: boolean;
 }
 
 export interface PageMeta {
@@ -136,6 +138,8 @@ export interface PageMeta {
 
 export interface Fact {
   value: string | number | null;
+  /** "reviewer" once a reviewer corrected it through chat */
+  source?: "document" | "reviewer";
   page: number;
   quote: string;
   bbox: BBox | null;
@@ -194,4 +198,73 @@ export interface CaseSummary {
   progress: CaseProgress | null;
   findings_count: number | null;
   unseen: boolean;
+}
+
+/** One saved state of a finding, from GET …/findings/{fid}/versions. */
+export interface FindingVersion {
+  version: number;
+  action: string;
+  by: string;
+  at: string;
+  note: string;
+  finding: Finding;
+}
+
+// --- chat ---
+
+export interface Box {
+  doc: string;
+  page: number;
+  bbox: BBox;
+}
+
+export type ProposalStatus = "pending" | "applying" | "applied" | "ignored" | "stale" | "failed";
+
+export interface Proposal {
+  id: string;
+  type: "review_finding" | "set_severity" | "add_finding" | "correct_fact";
+  reason: string;
+  finding_id: string | null;
+  action: "accept" | "dismiss" | "restore" | null;
+  severity: Severity | null;
+  title: string;
+  detail: string;
+  citations: Citation[];
+  path: string | null;
+  value: string | number | null;
+  evidence: Box | null;
+  finding_version: number | null;
+  status: ProposalStatus;
+  decided_by: string | null;
+  decided_at: string | null;
+  error: string | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "reviewer" | "assistant";
+  text: string;
+  selection: Box | null;
+  citations: Citation[];
+  proposals: Proposal[];
+  tool_calls: Record<string, unknown>[];
+  verified: boolean;
+  notes: string[];
+  by: string;
+  created_at: string;
+}
+
+export interface ChatThread {
+  id: string;
+  status: "active" | "closed";
+  carried_summary: string;
+  summary: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ChatState {
+  thread: ChatThread | null;
+  messages: ChatMessage[];
+  previous: { id: string; summary: string; created_at: string }[];
 }

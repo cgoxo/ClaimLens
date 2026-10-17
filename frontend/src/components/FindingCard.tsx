@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Finding, Review } from "../api/types";
+import type { Finding, FindingVersion, Review } from "../api/types";
 import { citationLabel } from "../lib/findings";
 
 interface Props {
@@ -8,15 +8,34 @@ interface Props {
   selected: boolean;
   onSelect(): void;
   onReview(action: "accept" | "dismiss" | "restore", note: string): Promise<Finding>;
+  /** loads the finding's saved versions; without it there is no History link */
+  loadVersions?(): Promise<FindingVersion[]>;
 }
+
+const ACTION_WORDS: Record<string, string> = {
+  analysis: "Found by the analysis", accept: "Accepted", dismiss: "Dismissed", restore: "Restored",
+  severity: "Severity changed", added: "Added", removed_by_correction: "Removed after a corrected fact",
+};
+const actionWords = (a: string) => ACTION_WORDS[a] ?? a.replace(/_/g, " ");
 
 const money = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
-export default function FindingCard({ finding, number, selected, onSelect, onReview }: Props) {
+export default function FindingCard({ finding, number, selected, onSelect, onReview, loadVersions }: Props) {
   const [review, setReview] = useState<Review | null>(finding.review);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<{ open: boolean; rows: FindingVersion[] | null; failed: boolean }>(
+    { open: false, rows: null, failed: false });
+
+  async function loadHistory() {
+    setHistory({ open: true, rows: null, failed: false });
+    try {
+      setHistory({ open: true, rows: await loadVersions!(), failed: false });
+    } catch {
+      setHistory({ open: true, rows: null, failed: true });
+    }
+  }
 
   async function act(action: "accept" | "dismiss" | "restore") {
     const before = review;
@@ -62,6 +81,29 @@ export default function FindingCard({ finding, number, selected, onSelect, onRev
               onChange={(e) => setNote(e.target.value)} disabled={saving} />
             <button className="btn btn-accept" disabled={saving} onClick={() => void act("accept")}>Accept</button>
             <button className="btn btn-quiet" disabled={saving} onClick={() => void act("dismiss")}>Dismiss</button>
+          </div>
+        )}
+        {loadVersions && (
+          <div className="finding-history">
+            <button type="button" className="btn btn-quiet" aria-expanded={history.open}
+              onClick={() => (history.open ? setHistory((h) => ({ ...h, open: false })) : void loadHistory())}>History</button>
+            {history.open && history.failed && (
+              <p className="form-error" role="alert">
+                Couldn't load the history. <button type="button" className="btn btn-quiet" onClick={() => void loadHistory()}>Retry</button>
+              </p>
+            )}
+            {history.open && !history.failed && !history.rows && <p className="muted small" role="status">Loading history…</p>}
+            {history.open && history.rows && (
+              <ol className="history-list small" aria-label="History">
+                {history.rows.map((v) => (
+                  <li key={v.version}>
+                    <span className="mono">v{v.version}</span> · {actionWords(v.action)} · {v.by} ·{" "}
+                    {new Date(v.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    {v.note && <> · “{v.note}”</>}
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
         )}
         {error && <p className="form-error" role="alert">{error}</p>}

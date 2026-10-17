@@ -227,11 +227,26 @@ def _clause_no(clause: str) -> str:
     return m.group(0) if m else ""
 
 
+CODE_COVERAGE_CODES = {"waiting_period", "initial_waiting_period", "room_rent_limit", "icu_limit",
+                       "non_payable_items", "bill_outside_cover_window"}
+
+
+def _code_findings(ctx: Ctx) -> list[Finding]:
+    return (_waiting_periods(ctx) + _initial_waiting(ctx) + _room_rent(ctx) + _icu(ctx) + _non_payable(ctx)
+            + _outside_window(ctx))
+
+
+def coverage_code_findings(ctx: Ctx) -> list[Finding]:
+    """The coverage findings code can decide alone (no AI), each pointing at its clause."""
+    if ctx.claim_facts is None or ctx.policy_facts is None:
+        return []
+    return [_with_box(ctx, f) for f in _code_findings(ctx)]
+
+
 def check_coverage(ctx: Ctx) -> list[Finding]:
     if ctx.claim_facts is None or ctx.policy_facts is None:
         return []
-    derived = (_waiting_periods(ctx) + _initial_waiting(ctx) + _room_rent(ctx) + _icu(ctx) + _non_payable(ctx)
-               + _outside_window(ctx))
+    derived = _code_findings(ctx)
     covered_clauses = {_clause_no(wp.clause) for wp in ctx.policy_facts.waiting_periods
                        for f in derived if f.code == "waiting_period" and wp.quote == f.citations[0].quote}
     covered_quotes = {(f.citations[0].page, normalise(f.citations[0].quote)) for f in derived}

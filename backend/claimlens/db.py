@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from claimlens.models import Case, CaseFile, Finding, PageInfo, now
+from claimlens.models import Case, CaseFile, ChatMessage, ChatThread, Finding, PageInfo, Proposal, now
 
 
 RUNNING = {"READING", "CHECKING", "PROVING"}
@@ -50,6 +50,15 @@ class Db(Protocol):
     def claim_run(self, case_id: str, attempt: int) -> bool: ...
     def add_case_file(self, case_id: str, card_id: str, file: CaseFile) -> int: ...
     def put_invoice(self, key: str, doc: dict) -> None: ...
+    def active_thread(self, case_id: str) -> ChatThread | None: ...
+    def create_thread(self, case_id: str, thread: ChatThread) -> None: ...
+    def close_thread(self, case_id: str, thread_id: str, summary: str) -> None: ...
+    def list_threads(self, case_id: str) -> list[ChatThread]: ...
+    def add_message(self, case_id: str, thread_id: str, msg: ChatMessage) -> None: ...
+    def get_messages(self, case_id: str, thread_id: str) -> list[ChatMessage]: ...
+    def update_proposal(self, case_id: str, thread_id: str, message_id: str, proposal: Proposal) -> None: ...
+    def claim_proposal(self, case_id: str, thread_id: str, message_id: str, proposal_id: str) -> bool: ...
+    def count_messages_since(self, owner: str, since: datetime) -> int: ...
 
 
 class LocalDb:
@@ -169,6 +178,70 @@ class LocalDb:
     def put_invoice(self, key: str, doc: dict) -> None:
         with self._lock:
             self._write("invoices", key, doc)
+
+    # chat: root/chats/<case>.json holds {thread_id: {"thread": ..., "messages": [...]}}
+    def active_thread(self, case_id: str) -> ChatThread | None:
+        active = [t for t in self.list_threads(case_id) if t.status == "active"]
+        return active[0] if active else None
+
+    def create_thread(self, case_id: str, thread: ChatThread) -> None:
+        with self._lock:
+            chats = self._read("chats", case_id) or {}
+            chats[thread.id] = {"thread": thread.model_dump(mode="json"), "messages": []}
+            self._write("chats", case_id, chats)
+
+    def close_thread(self, case_id: str, thread_id: str, summary: str) -> None:
+        with self._lock:
+            chats = self._read("chats", case_id) or {}
+            chats[thread_id]["thread"].update(status="closed", summary=summary)
+            self._write("chats", case_id, chats)
+
+    def list_threads(self, case_id: str) -> list[ChatThread]:
+        threads = [ChatThread.model_validate(c["thread"]) for c in (self._read("chats", case_id) or {}).values()]
+        return sorted(threads, key=lambda t: t.created_at, reverse=True)
+
+    def add_message(self, case_id: str, thread_id: str, msg: ChatMessage) -> None:
+        with self._lock:
+            chats = self._read("chats", case_id) or {}
+            chats[thread_id]["messages"].append(msg.model_dump(mode="json"))
+            self._write("chats", case_id, chats)
+
+    def get_messages(self, case_id: str, thread_id: str) -> list[ChatMessage]:
+        rows = (self._read("chats", case_id) or {}).get(thread_id, {}).get("messages", [])
+        return sorted((ChatMessage.model_validate(m) for m in rows), key=lambda m: m.created_at)
+
+    def update_proposal(self, case_id: str, thread_id: str, message_id: str, proposal: Proposal) -> None:
+        with self._lock:
+            chats = self._read("chats", case_id) or {}
+            for m in chats[thread_id]["messages"]:
+                if m["id"] == message_id:
+                    m["proposals"] = [proposal.model_dump(mode="json") if p["id"] == proposal.id else p
+                                      for p in m["proposals"]]
+            self._write("chats", case_id, chats)
+
+    def claim_proposal(self, case_id: str, thread_id: str, message_id: str, proposal_id: str) -> bool:
+        with self._lock:
+            chats = self._read("chats", case_id) or {}
+            for m in chats.get(thread_id, {}).get("messages", []):
+                if m["id"] == message_id:
+                    for p in m["proposals"]:
+                        if p["id"] == proposal_id and p["status"] == "pending":
+                            p["status"] = "applying"
+                            self._write("chats", case_id, chats)
+                            return True
+            return False
+
+    def count_messages_since(self, owner: str, since: datetime) -> int:
+        folder = self.root / "chats"
+        if not folder.is_dir():
+            return 0
+        count = 0
+        for path in folder.glob("*.json"):
+            for chat in json.loads(path.read_text()).values():
+                for m in chat["messages"]:
+                    msg = ChatMessage.model_validate(m)
+                    count += msg.role == "reviewer" and msg.by == owner and msg.created_at >= since
+        return count
 
 
 class FirestoreDb:
@@ -303,3 +376,68 @@ class FirestoreDb:
 
     def put_invoice(self, key: str, doc: dict) -> None:
         self.client.collection("invoices").document(key).set(doc)
+
+    # chat: cases/{id}/chats/{thread_id} with a messages/{message_id} subcollection
+    def _chats(self, case_id: str):
+        return self._case(case_id).collection("chats")
+
+    def active_thread(self, case_id: str) -> ChatThread | None:
+        docs = self._chats(case_id).where("status", "==", "active").stream()
+        threads = sorted((ChatThread.model_validate(d.to_dict()) for d in docs), key=lambda t: t.created_at,
+                         reverse=True)
+        return threads[0] if threads else None
+
+    def create_thread(self, case_id: str, thread: ChatThread) -> None:
+        self._chats(case_id).document(thread.id).set(thread.model_dump(mode="json"))
+
+    def close_thread(self, case_id: str, thread_id: str, summary: str) -> None:
+        self._chats(case_id).document(thread_id).update({"status": "closed", "summary": summary})
+
+    def list_threads(self, case_id: str) -> list[ChatThread]:
+        threads = [ChatThread.model_validate(d.to_dict()) for d in self._chats(case_id).stream()]
+        return sorted(threads, key=lambda t: t.created_at, reverse=True)
+
+    def add_message(self, case_id: str, thread_id: str, msg: ChatMessage) -> None:
+        # created_at is stored as a real timestamp so count_messages_since can compare it in the query
+        data = {**msg.model_dump(mode="json"), "created_at": msg.created_at}
+        self._chats(case_id).document(thread_id).collection("messages").document(msg.id).set(data)
+
+    def get_messages(self, case_id: str, thread_id: str) -> list[ChatMessage]:
+        docs = self._chats(case_id).document(thread_id).collection("messages").stream()
+        return sorted((ChatMessage.model_validate(d.to_dict()) for d in docs), key=lambda m: m.created_at)
+
+    def update_proposal(self, case_id: str, thread_id: str, message_id: str, proposal: Proposal) -> None:
+        from google.cloud import firestore
+
+        ref = self._chats(case_id).document(thread_id).collection("messages").document(message_id)
+
+        @firestore.transactional
+        def update(transaction) -> None:
+            msg = ChatMessage.model_validate(ref.get(transaction=transaction).to_dict())
+            proposals = [proposal if p.id == proposal.id else p for p in msg.proposals]
+            transaction.update(ref, {"proposals": [p.model_dump(mode="json") for p in proposals]})
+
+        update(self.client.transaction())
+
+    def claim_proposal(self, case_id: str, thread_id: str, message_id: str, proposal_id: str) -> bool:
+        from google.cloud import firestore
+
+        ref = self._chats(case_id).document(thread_id).collection("messages").document(message_id)
+
+        @firestore.transactional
+        def claim(transaction) -> bool:
+            msg = ChatMessage.model_validate(ref.get(transaction=transaction).to_dict())
+            if not any(p.id == proposal_id and p.status == "pending" for p in msg.proposals):
+                return False
+            proposals = [p.model_copy(update={"status": "applying"}) if p.id == proposal_id else p
+                         for p in msg.proposals]
+            transaction.update(ref, {"proposals": [p.model_dump(mode="json") for p in proposals]})
+            return True
+
+        return claim(self.client.transaction())
+
+    def count_messages_since(self, owner: str, since: datetime) -> int:
+        # collection-group query over every case's messages; needs a composite index on (by, role, created_at)
+        docs = (self.client.collection_group("messages")
+                .where("by", "==", owner).where("role", "==", "reviewer").where("created_at", ">=", since).stream())
+        return sum(1 for _ in docs)

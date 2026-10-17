@@ -212,6 +212,9 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
   animation: mark-in 260ms ease-out;
 }
 .marker-dashed { border-style: dashed; }
+.viewer-tools { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.select-layer { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+.history-list { margin: 6px 0 0; padding-left: 20px; }
 .marker-tag {
   position: absolute; top: -2px; left: -2px; transform: translate(-100%, -100%);
   background: var(--stamp-red); color: #fff; font-size: 11px; padding: 1px 5px;
@@ -326,3 +329,31 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
 .thumb-group + .thumb-group { padding-left: var(--space-2); border-left: 1px solid var(--rule); }
 .thumb-group-label { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 .rejected-files { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-2); }
+
+/* ---------- chat ---------- */
+.dossier-left .tabs { margin: var(--space-4) 0 var(--space-3); }
+.chat { display: grid; gap: var(--space-3); }
+.chat[hidden] { display: none; }
+.chat-head { display: flex; justify-content: flex-end; }
+.chat-previous { font-size: 14px; }
+.chat-previous ul { margin: var(--space-2) 0 0; padding-left: 1.2em; display: grid; gap: var(--space-1); }
+.chat-log { display: grid; gap: var(--space-3); max-height: 60vh; overflow-y: auto; }
+.chat-msg { padding: var(--space-3); border: 1px solid var(--rule); background: var(--sheet); display: grid; gap: var(--space-2); }
+.chat-msg.is-reviewer { background: var(--paper); margin-left: var(--space-5); }
+.chat-msg.is-unverified { color: var(--ink-soft); border-style: dashed; }
+.chat-msg p { margin: 0; }
+.chat-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-unverified { color: var(--amber); }
+.chat-cites { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chat-error { color: var(--stamp-red); margin: 0; }
+.chat-selection { margin: 0; }
+.chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); align-items: end; }
+.chat-form textarea { font: inherit; padding: var(--space-2); border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); resize: vertical; }
+.chat-form textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.proposal { border: 1px solid var(--slate); padding: var(--space-3); display: grid; gap: var(--space-2); background: var(--paper); }
+.proposal p { margin: 0; }
+.proposal-what { font-weight: 500; }
+.proposal-actions { display: flex; gap: var(--space-2); }
+.proposal.status-failed .proposal-status, .proposal-error { color: var(--stamp-red); }
+.proposal.status-stale .proposal-status { color: var(--amber); }
+.badge-corrected { border-color: var(--amber); color: var(--amber); font-size: 12px; }

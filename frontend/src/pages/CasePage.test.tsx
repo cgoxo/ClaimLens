@@ -4,6 +4,7 @@ import { ApiError } from "../api/client";
 import type { Case } from "../api/types";
 import { toPercentBox } from "../lib/highlight";
 import { renderPage } from "../test/auth";
+import { message, proposal } from "../test/chat";
 import { outcome } from "../test/outcome";
 import { sampleCase } from "../test/sampleCase";
 import CasePage from "./CasePage";
@@ -13,6 +14,7 @@ function setup(overrides: Record<string, unknown> = {}, data: Case = sampleCase)
     getCase: vi.fn(async () => data),
     pageImageUrl: vi.fn(async () => "blob:x"),
     releaseImages: vi.fn(),
+    getChat: vi.fn(async () => ({ thread: null, messages: [], previous: [] })),
     review: vi.fn(async (_id: string, fid: string, action: "accept" | "dismiss") => ({
       ...data.findings.find((f) => f.id === fid)!,
       review: { action, note: "", by: "a@x.com", at: "2026-10-10T10:00:00Z" },
@@ -24,6 +26,76 @@ function setup(overrides: Record<string, unknown> = {}, data: Case = sampleCase)
 }
 
 const card = (title: RegExp) => screen.getByRole("button", { name: title }).closest("article")!;
+
+describe("chat", () => {
+  const thread = { id: "t", status: "active" as const, carried_summary: "", summary: "", created_by: "a", created_at: "x" };
+  const empty = { getChat: vi.fn(async () => ({ thread: null, messages: [], previous: [] })) };
+
+  test("has a Chat tab next to Findings, and the findings tab is the default", async () => {
+    setup(empty);
+    await screen.findAllByRole("article");
+    expect(screen.getByRole("tab", { name: "Findings" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    expect(await screen.findByRole("textbox")).toBeInTheDocument();
+    expect(screen.queryAllByRole("article")).toHaveLength(0);
+  });
+
+  test("hides the Chat tab when chat is turned off", async () => {
+    setup({ getChat: vi.fn(async () => { throw new ApiError(404, "Not found"); }) });
+    await screen.findAllByRole("article");
+    await waitFor(() => expect(screen.queryByRole("tab", { name: "Chat" })).toBeNull());
+    expect(screen.getByRole("tab", { name: "Findings" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("falls back to Findings if chat turns out to be off while Chat is selected", async () => {
+    let reject!: (e: Error) => void;
+    setup({ getChat: vi.fn(() => new Promise((_, r) => { reject = r; })) });
+    await screen.findAllByRole("article");
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    reject(new ApiError(404, "Not found"));
+    await waitFor(() => expect(screen.queryByRole("tab", { name: "Chat" })).toBeNull());
+    expect(screen.getAllByRole("article").length).toBeGreaterThan(0);
+  });
+
+  test("a draft and an in-flight answer survive a tab switch", async () => {
+    let finish!: (m: ReturnType<typeof message>) => void;
+    const ask = vi.fn(() => new Promise<ReturnType<typeof message>>((r) => { finish = r; }));
+    setup({ ask });
+    await screen.findAllByRole("article");
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    await userEvent.type(await screen.findByRole("textbox"), "first");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Findings" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+    finish(message({ text: "Late answer" }));
+    expect(await screen.findByText("Late answer")).toBeInTheDocument();
+    await userEvent.type(screen.getByRole("textbox"), "draft");
+    await userEvent.click(screen.getByRole("tab", { name: "Findings" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    expect(screen.getByRole("textbox")).toHaveValue("draft");
+  });
+
+  test("hides removed findings", async () => {
+    const removed = { ...sampleCase.findings[0], id: "gone", title: "Removed by a correction", removed: true };
+    setup(empty, { ...sampleCase, findings: [...sampleCase.findings, removed] });
+    await screen.findAllByRole("article");
+    expect(screen.getAllByRole("article")).toHaveLength(9);
+    expect(screen.queryByText("Removed by a correction")).toBeNull();
+  });
+
+  test("an applied proposal refetches the case once, even without a current outcome", async () => {
+    const getCase = vi.fn(async () => sampleCase);
+    const getChat = vi.fn(async () => ({ thread, messages: [message({ proposals: [proposal()] })], previous: [] }));
+    const decide = vi.fn(async () => ({ proposal: proposal({ status: "applied" }), current: null }));
+    setup({ getCase, getChat, decide });
+    await userEvent.click(await screen.findByRole("tab", { name: "Chat" }));
+    const apply = await screen.findByRole("button", { name: "Apply" });
+    const before = getCase.mock.calls.length;
+    await userEvent.click(apply);
+    await waitFor(() => expect(getCase.mock.calls.length).toBe(before + 1));
+  });
+});
 
 test("shows the stamp, payable and grouped findings", async () => {
   setup();
@@ -188,6 +260,7 @@ test("leaving the case page releases its page images", async () => {
   const releaseImages = vi.fn();
   const { unmount } = renderPage(<CasePage />, {
     getCase: vi.fn(async () => sampleCase), pageImageUrl: vi.fn(async () => "blob:x"), releaseImages,
+    getChat: vi.fn(async () => ({ thread: null, messages: [], previous: [] })),
   }, "/cases/c1", "/cases/:id");
   await screen.findAllByRole("article");
   unmount();

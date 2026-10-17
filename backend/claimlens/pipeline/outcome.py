@@ -65,7 +65,7 @@ def recommend(findings: list[Finding], risk: str, settlement: Settlement, policy
 
 
 def outcome(policy: PolicyFacts | None, facts: ClaimFacts | None, findings: list[Finding]) -> Outcome:
-    kept = [f for f in findings if not (f.review and f.review.action == "dismiss")]
+    kept = [f for f in findings if not f.removed and not (f.review and f.review.action == "dismiss")]
     value = score(kept)
     risk = risk_band(value)
     settlement = settle(policy, facts, kept)

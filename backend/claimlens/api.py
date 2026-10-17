@@ -9,10 +9,9 @@ from pydantic import BaseModel
 
 from claimlens.auth import current_user
 from claimlens.cards import card_label, cards_of, layout_error, stream_of
-from claimlens.models import Card, CardRole, Case, CaseFile, ClaimFacts, Finding, Outcome, PolicyFacts, Review, now
-from claimlens.pipeline.outcome import outcome
+from claimlens.models import Card, CardRole, Case, CaseFile, now
 from claimlens.pipeline.read import open_document
-from claimlens.pipeline.report import risk_band, score
+from claimlens.review import ReviewConflict, record_review
 
 RUNNING = {"QUEUED", "READING", "CHECKING", "PROVING"}
 FINISHED = {"READY", "FAILED", "REJECTED"}
@@ -180,7 +179,7 @@ def get_case(case_id: str, request: Request, user: str = Depends(current_user)):
         **case.model_dump(mode="json"),
         "cards": [{"id": c.id, "role": c.role, "label": card_label(cards, c.id),
                    "files": [{"name": f.name, "pages": f.pages} for f in c.files]} for c in cards],
-        "findings": [f.model_dump(mode="json") for f in db.get_findings(case_id)],
+        "findings": [f.model_dump(mode="json") for f in db.get_findings(case_id) if not f.removed],
         "pages": [p.model_dump(mode="json", include={"doc", "page", "kind", "width", "height", "card_id", "file_index"})
                   for p in db.get_pages(case_id)],
     }
@@ -201,44 +200,18 @@ class ReviewIn(BaseModel):
     note: str = ""
 
 
-def _recalculate(db, case_id: str, findings: list[Finding]):
-    """Recompute the outcome after a review and store it. Older cases keep their stored payable."""
-    case = db.get_case(case_id)
-    if case.analysis is None:  # analysed before the rulebook: no settlement to recompute, keep the stored payable
-        kept = [f for f in findings if not (f.review and f.review.action == "dismiss")]
-        value = score(kept)
-        o = Outcome(score=value, risk=risk_band(value), payable=case.payable)
-        db.update_case(case_id, current=o, score=o.score, risk=o.risk)
-        return o
-    context = case.context or {}
-    facts = ClaimFacts.model_validate(context["claim"]) if context.get("claim") else None
-    policy = PolicyFacts.model_validate(context["policy"]) if context.get("policy") else None
-    o = outcome(policy, facts, findings)
-    db.update_case(case_id, current=o, score=o.score, risk=o.risk, payable=o.payable)
-    return o
-
-
 @router.post("/cases/{case_id}/findings/{fid}/review")
 def review(case_id: str, fid: str, body: ReviewIn, request: Request, user: str = Depends(current_user)):
-    _own_case(request, case_id, user)
-    db = _deps(request).db
-    before = next((f for f in db.get_findings(case_id) if f.id == fid), None)
-    if before is None:
-        raise HTTPException(404, "Finding not found")
-    if body.action == "restore" and not (before.review and before.review.action == "dismiss"):
-        raise HTTPException(409, "Only a dismissed finding can be restored")
-    if not db.get_finding_versions(case_id, fid):
-        db.add_finding_version(case_id, fid, before, "analysis", "pipeline", "")
-    new = None if body.action == "restore" else Review(action=body.action, note=body.note, by=user)
-    finding = db.update_finding(case_id, fid, review=new)
-    if finding is None:
-        raise HTTPException(404, "Finding not found")
-    db.add_finding_version(case_id, fid, finding, body.action, user, body.note)
-    result = finding.model_dump(mode="json")
+    case = _own_case(request, case_id, user)
     try:
-        result["current"] = _recalculate(db, case_id, db.get_findings(case_id)).model_dump(mode="json")
-    except Exception:
-        log.exception("case %s: recalculating after review failed", case_id)
+        finding, current = record_review(_deps(request), case, fid, body.action, body.note, user)
+    except LookupError:
+        raise HTTPException(404, "Finding not found")
+    except ReviewConflict as e:
+        raise HTTPException(409, str(e))
+    result = finding.model_dump(mode="json")
+    if current is not None:
+        result["current"] = current.model_dump(mode="json")
     return result
 
 

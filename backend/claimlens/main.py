@@ -9,6 +9,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from claimlens import jobs, logs
 from claimlens.api import router
+from claimlens.chat.routes import router as chat_router
 from claimlens.deps import Deps, build_deps
 from claimlens.settings import Settings
 
@@ -67,6 +68,7 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None) -> Fa
         return {"ok": True}
 
     app.include_router(router)
+    app.include_router(chat_router)
     _serve_frontend(app, settings)
     return app
 

@@ -41,6 +41,13 @@ The *Create case* request points at `samples/*.pdf` with absolute paths from you
 | GET | `/api/cases/{id}` | status, score, risk, payable, summary, findings, pages |
 | GET | `/api/cases/{id}/pages/{doc}/{n}.png` | page image |
 | POST | `/api/cases/{id}/findings/{fid}/review` | `{"action": "accept" \| "dismiss", "note"}` |
+| GET | `/api/cases/{id}/chat` | active chat thread, its messages and summaries of earlier threads |
+| POST | `/api/cases/{id}/chat/messages` | `{"text", "selection"?: {doc, page, bbox}}` → the assistant's reply (citations, proposals) |
+| POST | `/api/cases/{id}/chat/new` | close the active thread (summarised) and start a new one |
+| POST | `/api/cases/{id}/chat/proposals/{pid}/apply` | apply a proposal → `{proposal, current}` |
+| POST | `/api/cases/{id}/chat/proposals/{pid}/ignore` | ignore a proposal |
+
+The chat routes need the case to be `READY` and `CHAT=on` (otherwise 404).
 
 Auth: `AUTH_MODE=dev` → `X-Dev-User: <email>` header. `AUTH_MODE=firebase` → `Authorization: Bearer <Firebase ID
 token>`: any Google account (verified email) is let in.
@@ -58,6 +65,10 @@ All in `.env.example`. Each backend part switches between local and GCP: `STORAG
 `DB=local|firestore`, `AI=vertex|fake`, `OCR=off|docai`, `AUTH_MODE=dev|firebase`.
 `BILL_STORY=on|off` (default `off`) turns on Gemini's judgement of the bill against the treatment; it is off because
 its live precision was below the bar.
+`CHAT=on|off` (default `on`) turns case chat on or off. Limits: `CHAT_MAX_TOOLS=6` tool calls per answer,
+`CHAT_SECONDS=60` per answer, `CHAT_HISTORY=20` messages sent to the model, `CHAT_MAX_CHARS=2000` per question,
+`CHAT_DAILY_LIMIT=200` messages per person per day, `CHAT_TOOL_CHARS=8000` per tool result. The live smoke test is
+`PYTHONPATH=. python -m eval.chat_smoke` (needs Vertex credentials).
 
 ## GCP (project `social-pulse-510513`)
 
