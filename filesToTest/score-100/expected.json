@@ -1,0 +1,24 @@
+{
+  "score": 100,
+  "band": "high",
+  "seed": 1,
+  "planted": [
+    "retype_total"
+  ],
+  "findings": {
+    "editing_tool": [
+      "high"
+    ],
+    "font_outlier": [
+      "critical"
+    ],
+    "hidden_text": [
+      "critical"
+    ],
+    "sum_mismatch": [
+      "high"
+    ]
+  },
+  "payable": 69800.0,
+  "recommendation": "investigate"
+}

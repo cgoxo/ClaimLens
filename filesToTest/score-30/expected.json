@@ -1,0 +1,19 @@
+{
+  "score": 30,
+  "band": "review",
+  "seed": 3,
+  "planted": [
+    "editor_resave",
+    "incremental_save"
+  ],
+  "findings": {
+    "editing_tool": [
+      "high"
+    ],
+    "multiple_saves": [
+      "medium"
+    ]
+  },
+  "payable": 28800.0,
+  "recommendation": "query"
+}

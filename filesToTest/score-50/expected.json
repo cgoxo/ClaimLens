@@ -1,0 +1,22 @@
+{
+  "score": 50,
+  "band": "review",
+  "seed": 2,
+  "planted": [
+    "late_edit",
+    "admit_after_discharge"
+  ],
+  "findings": {
+    "date_order": [
+      "high"
+    ],
+    "inpatient_outside_stay": [
+      "high"
+    ],
+    "late_edit": [
+      "medium"
+    ]
+  },
+  "payable": 75800.0,
+  "recommendation": "query"
+}
