@@ -23,10 +23,12 @@ Positions in scenes (camera keys, boxes, cursor) are in the page's CSS pixels: t
 ## Sound
 
 ```bash
-node music.mjs                          # public/music.wav: the quiet background bed (made in code)
-node voice.mjs "Tara (English (India))" # narration from SCRIPT.md, one clip per line, and src/voiceTiming.ts
-npm run render
-npx remotion ffmpeg -i out/claimlens-demo.mp4 -c:v copy -af "loudnorm=I=-16:TP=-1.5:LRA=11" -ar 48000 -c:a aac -b:a 192k out/claimlens-demo-final.mp4
+node voice.mjs "Tara (English (India))" # narration from SCRIPT.md: one clip per line, slowed to 88%, and src/voiceTiming.ts
+node music.mjs                          # public/music.wav: a light plucked bed that already dips under every line
+npm run render                          # out/claimlens-demo.mp4, voice only
+npx remotion ffmpeg -i out/claimlens-demo.mp4 -c:v copy -af "loudnorm=I=-16:TP=-1.5:LRA=11" -ar 48000 -c:a aac -b:a 192k out/claimlens-demo-voice-only.mp4
+npx remotion ffmpeg -i out/claimlens-demo.mp4 -i public/music.wav -filter_complex "[1:a]volume=0.16[m];[0:a][m]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-16:TP=-1.5:LRA=11[a]" -map 0:v -map "[a]" -c:v copy -ar 48000 -c:a aac -b:a 192k out/claimlens-demo-with-music.mp4
 ```
 
-The last step levels the sound to the usual loudness for online video (-16 LUFS).
+Run `music.mjs` after `voice.mjs`: it reads the narration timing. Both finals are levelled to -16 LUFS, the usual
+loudness for online video.

@@ -5,10 +5,10 @@ export const SCENES = [
   { id: "upload", seconds: 24 },
   { id: "results", seconds: 32 },
   { id: "proof", seconds: 15 },
-  { id: "agent", seconds: 33 },
+  { id: "agent", seconds: 34 },
   { id: "cloud", seconds: 28 },
   { id: "engineering", seconds: 14 },
-  { id: "close", seconds: 9 },
+  { id: "close", seconds: 8 },
 ] as const;
 
 export type SceneId = (typeof SCENES)[number]["id"];
@@ -17,6 +17,6 @@ export type SceneId = (typeof SCENES)[number]["id"];
 export const VOICE = true;
 
 // Quiet background bed (public/music.wav, made by music.mjs); its level drops when the voice is on
-export const MUSIC = true;
+export const MUSIC = false; // music is mixed in after rendering (see README), so a voice-only cut exists too
 
 export const LIVE_URL = "claimlens-api-538594533263.asia-south1.run.app";

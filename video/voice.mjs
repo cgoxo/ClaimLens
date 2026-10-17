@@ -6,8 +6,9 @@ import fs from "node:fs";
 
 const voice = process.argv[2];
 if (!voice) throw new Error('usage: node voice.mjs "<voice name>"');
-const LEAD = 0.45; // seconds of quiet at the start of a scene whose first line has no start time
-const GAP = 0.32;  // pause between lines
+const LEAD = 0.45;  // seconds of quiet at the start of a scene whose first line has no start time
+const GAP = 0.55;   // pause between lines
+const TEMPO = 0.88; // slower than the voice's own pace, without changing its pitch: calmer, easier to follow
 
 const script = fs.readFileSync("SCRIPT.md", "utf8");
 const scenes = [...script.matchAll(/## \d\. `(\w+)\.m4a` \((\d+) s\)\n\n((?:> .*\n)+)/g)]
@@ -36,7 +37,10 @@ for (const s of scenes) {
     if (m) at = Math.max(at, Number(m[1]));
     const text = raw.slice(m ? m[0].length : 0);
     const file = `voice/${s.id}/${i}.wav`;
-    execFileSync("say", ["-v", voice, "--file-format=WAVE", "--data-format=LEI16@44100", "-o", `public/${file}`, text]);
+    const spoken = `public/voice/${s.id}/${i}.raw.wav`;
+    execFileSync("say", ["-v", voice, "--file-format=WAVE", "--data-format=LEI16@44100", "-o", spoken, text]);
+    execFileSync("npx", ["remotion", "ffmpeg", "-v", "error", "-y", "-i", spoken, "-af", `atempo=${TEMPO}`, "-c:a", "pcm_s16le", `public/${file}`]);
+    fs.rmSync(spoken);
     const dur = wavSeconds(`public/${file}`);
     const line = { text, file, from: +at.toFixed(2), to: +(at + dur).toFixed(2) };
     at += dur + GAP;
