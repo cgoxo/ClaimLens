@@ -7,11 +7,11 @@ import fs from "node:fs";
 const voice = process.argv[2];
 if (!voice) throw new Error('usage: node voice.mjs "<voice name>"');
 const LEAD = 0.45;  // seconds of quiet at the start of a scene whose first line has no start time
-const GAP = 0.55;   // pause between lines
+const GAP = 0.45;   // pause between lines
 const TEMPO = 0.88; // slower than the voice's own pace, without changing its pitch: calmer, easier to follow
 
 const script = fs.readFileSync("SCRIPT.md", "utf8");
-const scenes = [...script.matchAll(/## \d\. `(\w+)\.m4a` \((\d+) s\)\n\n((?:> .*\n)+)/g)]
+const scenes = [...script.matchAll(/## \d+\. `(\w+)\.m4a` \((\d+) s\)\n\n((?:> .*\n)+)/g)]
   .map(([, id, seconds, body]) => ({ id, seconds: Number(seconds), lines: body.trim().split("\n").map((l) => l.replace(/^> /, "").trim()) }));
 
 /** Length of a PCM WAV in seconds, from its fmt and data chunks */

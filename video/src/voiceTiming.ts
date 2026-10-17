@@ -9,266 +9,268 @@ export const VOICE_LINES: Record<string, VoiceLine[]> = {
       "to": 2.12
     },
     {
-      "text": "The real total is hidden under a white box,",
+      "text": "The real total is hidden under a white box, and a bigger one is typed on top.",
       "file": "voice/hook/1.wav",
-      "from": 2.67,
-      "to": 5.44
+      "from": 2.57,
+      "to": 7.47
     },
     {
-      "text": "and a bigger one is typed on top.",
+      "text": "Would your team catch it?",
       "file": "voice/hook/2.wav",
-      "from": 5.99,
-      "to": 8.1
+      "from": 7.92,
+      "to": 9.21
+    }
+  ],
+  "why": [
+    {
+      "text": "In India alone, health insurers lose up to ten thousand crore rupees a year to fraud, waste and abuse.",
+      "file": "voice/why/0.wav",
+      "from": 0.45,
+      "to": 6.85
     },
     {
-      "text": "Would you catch it?",
-      "file": "voice/hook/3.wav",
-      "from": 8.65,
-      "to": 9.48
+      "text": "That's across more than three crore claims a year.",
+      "file": "voice/why/1.wav",
+      "from": 7.3,
+      "to": 10.05
+    },
+    {
+      "text": "And with AI, faking a bill gets easier every day.",
+      "file": "voice/why/2.wav",
+      "from": 10.5,
+      "to": 13.94
     }
   ],
   "problem": [
     {
-      "text": "AI reads documents brilliantly.",
+      "text": "Across Asia-Pacific, claims arrive as PDFs, scans and phone photos.",
       "file": "voice/problem/0.wav",
       "from": 0.45,
-      "to": 2.51
+      "to": 5.67
     },
     {
-      "text": "But it also makes things up.",
+      "text": "No reviewer can check every page.",
       "file": "voice/problem/1.wav",
-      "from": 3.06,
-      "to": 4.85
+      "from": 6.12,
+      "to": 8.23
     },
     {
       "text": "So we built ClaimLens.",
       "file": "voice/problem/2.wav",
-      "from": 6,
-      "to": 7.61
+      "from": 8.68,
+      "to": 10.29
     },
     {
       "text": "Gemini reads. Code decides. Every claim is proved.",
       "file": "voice/problem/3.wav",
-      "from": 8.16,
-      "to": 12.29
+      "from": 10.74,
+      "to": 14.87
     }
   ],
   "upload": [
     {
-      "text": "A reviewer signs in with Google,",
+      "text": "Sign in with Google, and drop in the claim and the policy.",
       "file": "voice/upload/0.wav",
       "from": 0.45,
-      "to": 2.46
+      "to": 3.86
     },
     {
-      "text": "and uploads the claim and the policy.",
+      "text": "ClaimLens reads every page, and runs OCR on photos with Document AI.",
       "file": "voice/upload/1.wav",
-      "from": 3.6,
-      "to": 5.85
-    },
-    {
-      "text": "Cloud Tasks runs the analysis in the background.",
-      "file": "voice/upload/2.wav",
       "from": 9.1,
-      "to": 12.12
+      "to": 14.25
     },
     {
-      "text": "Every page is read, and Gemini pulls out the facts.",
+      "text": "It confirms these are real insurance documents, then Gemini extracts the facts.",
+      "file": "voice/upload/2.wav",
+      "from": 14.7,
+      "to": 20.22
+    },
+    {
+      "text": "In under a minute, the case file is ready.",
       "file": "voice/upload/3.wav",
-      "from": 14,
-      "to": 17.42
-    },
-    {
-      "text": "In under a minute, it's ready.",
-      "file": "voice/upload/4.wav",
-      "from": 19,
-      "to": 20.43
+      "from": 20.67,
+      "to": 23.04
     }
   ],
   "results": [
     {
-      "text": "Risk: one hundred out of one hundred.",
+      "text": "Risk: one hundred out of one hundred. Recommendation: investigate.",
       "file": "voice/results/0.wav",
       "from": 0.45,
-      "to": 2.55
+      "to": 5.01
     },
     {
-      "text": "Gemini writes the summary. Code sets the score.",
+      "text": "Every fact links back to the page it came from.",
       "file": "voice/results/1.wav",
-      "from": 5,
-      "to": 8.56
+      "from": 5.46,
+      "to": 8.5
     },
     {
-      "text": "Every finding is marked on its page.",
+      "text": "Every problem is marked on the document: an amount in a different font, the real total hidden underneath,",
       "file": "voice/results/2.wav",
-      "from": 9.2,
-      "to": 11.41
+      "from": 9.7,
+      "to": 16.33
     },
     {
-      "text": "This total uses a different font.",
+      "text": "an invoice already used in another claim, even on a phone photo.",
       "file": "voice/results/3.wav",
-      "from": 11.96,
-      "to": 14.11
+      "from": 16.78,
+      "to": 20.9
     },
     {
-      "text": "This invoice was already used in another claim.",
+      "text": "The policy becomes a rulebook. A waiting period applies, line by line.",
       "file": "voice/results/4.wav",
-      "from": 15.7,
-      "to": 18.54
+      "from": 21.35,
+      "to": 26.41
     },
     {
-      "text": "And cataract is still in its waiting period,",
+      "text": "Payable: zero.",
       "file": "voice/results/5.wav",
-      "from": 21.7,
-      "to": 24.5
-    },
-    {
-      "text": "so the payable amount is zero.",
-      "file": "voice/results/6.wav",
-      "from": 27.2,
-      "to": 29.23
+      "from": 26.86,
+      "to": 28.4
     }
   ],
   "proof": [
     {
-      "text": "Here's why you can trust it.",
+      "text": "AI can make things up. So every fact must quote its page.",
       "file": "voice/proof/0.wav",
       "from": 0.45,
-      "to": 2.07
+      "to": 4.88
     },
     {
-      "text": "Every fact must quote its page.",
+      "text": "No quote, no finding.",
       "file": "voice/proof/1.wav",
-      "from": 2.62,
-      "to": 4.76
-    },
-    {
-      "text": "If the quote isn't there, it's dropped.",
-      "file": "voice/proof/2.wav",
       "from": 5.4,
-      "to": 7.66
+      "to": 7.35
     },
     {
       "text": "A different number, or a missing \"not\", never passes.",
-      "file": "voice/proof/3.wav",
+      "file": "voice/proof/2.wav",
       "from": 9.8,
       "to": 13.14
     }
   ],
   "agent": [
     {
-      "text": "Now, the agent.",
+      "text": "And this is where it becomes agentic.",
       "file": "voice/agent/0.wav",
       "from": 0.45,
-      "to": 1.89
+      "to": 2.77
     },
     {
-      "text": "Reviewers can question Gemini about the case.",
+      "text": "Reviewers question a Gemini agent that investigates the case with its own tools.",
       "file": "voice/agent/1.wav",
-      "from": 2.44,
-      "to": 5.2
+      "from": 3.22,
+      "to": 8.14
     },
     {
-      "text": "It uses read-only tools,",
+      "text": "Every answer is checked against the documents.",
       "file": "voice/agent/2.wav",
-      "from": 5.75,
-      "to": 7.44
+      "from": 8.6,
+      "to": 11.35
     },
     {
-      "text": "and every answer passes the same proof check.",
+      "text": "Draw a box on any page, and ask about just that area.",
       "file": "voice/agent/3.wav",
-      "from": 7.99,
-      "to": 10.96
+      "from": 14.1,
+      "to": 17.79
     },
     {
-      "text": "Draw a box on the bill, and ask about just that area.",
+      "text": "It does the maths, and spots the total that doesn't fit.",
       "file": "voice/agent/4.wav",
-      "from": 13.1,
-      "to": 16.54
+      "from": 18.24,
+      "to": 21.43
     },
     {
-      "text": "It adds up the lines, and the total doesn't fit.",
+      "text": "It even proposes changes, but nothing happens until a human approves.",
       "file": "voice/agent/5.wav",
-      "from": 17.2,
-      "to": 19.94
-    },
-    {
-      "text": "It can suggest changes, but only a human can apply them.",
-      "file": "voice/agent/6.wav",
-      "from": 23.2,
-      "to": 27.02
+      "from": 24.2,
+      "to": 28.82
     },
     {
       "text": "The agent investigates. Code verifies. A human decides.",
-      "file": "voice/agent/7.wav",
-      "from": 28.3,
-      "to": 32.69
+      "file": "voice/agent/6.wav",
+      "from": 29.3,
+      "to": 33.69
     }
   ],
   "cloud": [
     {
-      "text": "All of it runs on Google Cloud.",
+      "text": "ClaimLens runs entirely on Google Cloud, in the Mumbai region.",
       "file": "voice/cloud/0.wav",
-      "from": 0.5,
-      "to": 2.4
+      "from": 0.45,
+      "to": 4.42
     },
     {
-      "text": "One Cloud Run service hosts everything.",
+      "text": "Firebase signs reviewers in.",
       "file": "voice/cloud/1.wav",
-      "from": 4.3,
-      "to": 6.96
+      "from": 4.87,
+      "to": 6.8
     },
     {
-      "text": "Files in Cloud Storage. Cases in Firestore.",
+      "text": "One Cloud Run service hosts the app, the pipeline and the agent, and scales to zero when idle.",
       "file": "voice/cloud/2.wav",
-      "from": 8.3,
-      "to": 11.84
+      "from": 7.25,
+      "to": 14.1
     },
     {
-      "text": "Cloud Tasks retries failures, and never runs a job twice.",
+      "text": "Cloud Tasks runs every analysis reliably. Firestore and Cloud Storage keep the case file.",
       "file": "voice/cloud/3.wav",
-      "from": 12.39,
-      "to": 16.38
+      "from": 14.55,
+      "to": 21.17
     },
     {
-      "text": "Document AI reads the scans. Gemini, on Vertex AI, reads the meaning.",
+      "text": "Document AI reads the scans. Gemini on Vertex AI reads the meaning.",
       "file": "voice/cloud/4.wav",
-      "from": 17.3,
-      "to": 22.68
+      "from": 21.62,
+      "to": 26.82
     },
     {
-      "text": "And every push is tested and deployed automatically.",
+      "text": "Every release ships automatically, with no stored keys.",
       "file": "voice/cloud/5.wav",
-      "from": 23.23,
-      "to": 26.37
+      "from": 27.27,
+      "to": 30.89
     }
   ],
-  "engineering": [
+  "features": [
     {
-      "text": "Over six hundred tests run before anything ships.",
-      "file": "voice/engineering/0.wav",
-      "from": 0.5,
-      "to": 3.81
+      "text": "Edited files. Hidden text. Totals that don't add up.",
+      "file": "voice/features/0.wav",
+      "from": 0.45,
+      "to": 4.29
     },
     {
-      "text": "And when a forgery model failed our tests, we cut it.",
-      "file": "voice/engineering/1.wav",
-      "from": 6.9,
-      "to": 10.53
+      "text": "Reused invoices. Missing pages. Policy limits.",
+      "file": "voice/features/1.wav",
+      "from": 4.74,
+      "to": 8.75
+    },
+    {
+      "text": "One case file. Every problem, on its page.",
+      "file": "voice/features/2.wav",
+      "from": 9.2,
+      "to": 12.58
     }
   ],
   "close": [
     {
-      "text": "ClaimLens.",
+      "text": "ClaimLens. AI that shows its work.",
       "file": "voice/close/0.wav",
-      "from": 0.6,
-      "to": 1.31
+      "from": 0.5,
+      "to": 3.04
     },
     {
-      "text": "It flags. A human decides.",
+      "text": "Every page read. Every rupee proved.",
       "file": "voice/close/1.wav",
-      "from": 1.86,
-      "to": 4.03
+      "from": 3.49,
+      "to": 6.27
+    },
+    {
+      "text": "Built by Himanshi, Chitresh and Priyanshu.",
+      "file": "voice/close/2.wav",
+      "from": 6.72,
+      "to": 9.67
     }
   ]
 };

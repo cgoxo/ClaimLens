@@ -1,19 +1,32 @@
 import React from "react";
 import { interpolate } from "remotion";
 import { C, F } from "../theme";
+import { cue } from "../cues";
 import { Captions, Kicker, Paper, Scene, ease, prog, useT } from "../components/ui";
 
 type Node = { x: number; y: number; w: number; h: number; title: string; sub: string; color: string; at: number };
 
+// Each service lights up as the narration names it (see cues.ts); the numbers are fallbacks without a voiceover
+const T = {
+  auth: cue("cloud", "Firebase", 1.0),
+  run: cue("cloud", "Cloud Run", 4.2),
+  tasks: cue("cloud", "Cloud Tasks", 12.2),
+  firestore: cue("cloud", "Firestore", 8.2),
+  storage: cue("cloud", "Cloud Storage", 8.8),
+  docai: cue("cloud", "Document AI", 17.2),
+  gemini: cue("cloud", "Vertex", 17.8),
+  ship: cue("cloud", "Every release", 22.0),
+};
+
 const N: Record<string, Node> = {
-  auth: { x: 260, y: 190, w: 360, h: 112, title: "Firebase Authentication", sub: "Google sign-in, ID tokens", color: C.gYellow, at: 1.0 },
-  browser: { x: 260, y: 430, w: 360, h: 112, title: "Reviewer's browser", sub: "React + Vite + TypeScript", color: C.slate, at: 0.8 },
-  run: { x: 740, y: 260, w: 440, h: 360, title: "Cloud Run · claimlens-api", sub: "asia-south1 · one container", color: C.gBlue, at: 4.2 },
-  tasks: { x: 740, y: 690, w: 440, h: 112, title: "Cloud Tasks · claimlens-jobs", sub: "calls back · 3 attempts · runs once", color: C.gRed, at: 12.2 },
-  storage: { x: 1310, y: 150, w: 420, h: 104, title: "Cloud Storage", sub: "uploaded files, page images", color: C.gGreen, at: 8.2 },
-  firestore: { x: 1310, y: 280, w: 420, h: 104, title: "Firestore", sub: "cases, findings, invoices, chats", color: C.gYellow, at: 8.8 },
-  docai: { x: 1310, y: 410, w: 420, h: 104, title: "Document AI · OCR", sub: "scanned and photographed pages", color: C.gBlue, at: 17.2 },
-  gemini: { x: 1310, y: 540, w: 420, h: 120, title: "Vertex AI · Gemini 2.5 Flash", sub: "facts, policy rules, summary, chat agent", color: C.gBlue, at: 17.8 },
+  auth: { x: 260, y: 190, w: 360, h: 112, title: "Firebase Authentication", sub: "Google sign-in, ID tokens", color: C.gYellow, at: T.auth },
+  browser: { x: 260, y: 430, w: 360, h: 112, title: "Reviewer's browser", sub: "React + Vite + TypeScript", color: C.slate, at: Math.max(0.6, T.auth - 0.4) },
+  run: { x: 740, y: 260, w: 440, h: 360, title: "Cloud Run · claimlens-api", sub: "asia-south1, Mumbai · scales to zero", color: C.gBlue, at: T.run },
+  tasks: { x: 740, y: 690, w: 440, h: 112, title: "Cloud Tasks · claimlens-jobs", sub: "calls back · 3 attempts · runs once", color: C.gRed, at: T.tasks },
+  storage: { x: 1310, y: 150, w: 420, h: 104, title: "Cloud Storage", sub: "uploaded files, page images", color: C.gGreen, at: T.storage },
+  firestore: { x: 1310, y: 280, w: 420, h: 104, title: "Firestore", sub: "cases, findings, invoices, chats", color: C.gYellow, at: T.firestore },
+  docai: { x: 1310, y: 410, w: 420, h: 104, title: "Document AI · OCR", sub: "scanned and photographed pages", color: C.gBlue, at: T.docai },
+  gemini: { x: 1310, y: 540, w: 420, h: 120, title: "Vertex AI · Gemini 2.5 Flash", sub: "facts, policy rules, summary, chat agent", color: C.gBlue, at: T.gemini },
 };
 
 const center = (n: Node) => ({ x: n.x + n.w / 2, y: n.y + n.h / 2 });
@@ -28,16 +41,16 @@ const edgePoint = (a: Node, b: Node) => {
 };
 
 const LINKS: [string, string, number][] = [
-  ["browser", "auth", 1.4], ["browser", "run", 4.8], ["run", "storage", 8.6], ["run", "firestore", 9.2],
-  ["run", "tasks", 12.6], ["run", "docai", 17.6], ["run", "gemini", 18.2],
+  ["browser", "auth", T.auth + 0.4], ["browser", "run", T.run + 0.6], ["run", "storage", T.storage + 0.4], ["run", "firestore", T.firestore + 0.4],
+  ["run", "tasks", T.tasks + 0.4], ["run", "docai", T.docai + 0.4], ["run", "gemini", T.gemini + 0.4],
 ];
 
 // packets: [from, to, start second, travel seconds]
 const PACKETS: [string, string, number, number][] = [
-  ["browser", "auth", 1.8, 0.7], ["auth", "browser", 2.6, 0.7], ["browser", "run", 5.3, 0.9],
-  ["run", "storage", 9.4, 0.7], ["run", "firestore", 10.2, 0.7],
-  ["run", "tasks", 13.2, 0.8], ["tasks", "run", 14.8, 0.8],
-  ["run", "docai", 18.6, 0.7], ["run", "gemini", 19.5, 0.7], ["gemini", "run", 20.4, 0.7], ["run", "firestore", 21.2, 0.7],
+  ["browser", "auth", T.auth + 0.8, 0.7], ["auth", "browser", T.auth + 1.6, 0.7], ["browser", "run", T.run + 1.1, 0.9],
+  ["run", "firestore", T.firestore + 1.0, 0.7], ["run", "storage", T.storage + 1.0, 0.7],
+  ["run", "tasks", T.tasks + 1.0, 0.8], ["tasks", "run", T.tasks + 2.4, 0.8],
+  ["run", "docai", T.docai + 1.0, 0.7], ["run", "gemini", T.gemini + 1.0, 0.7], ["gemini", "run", T.gemini + 1.9, 0.7], ["run", "firestore", T.gemini + 2.7, 0.7],
 ];
 
 const SHIP: [string, string][] = [
@@ -66,12 +79,12 @@ const Box: React.FC<{ n: Node; children?: React.ReactNode }> = ({ n, children })
 
 export const Cloud: React.FC = () => {
   const { t } = useT();
-  const retry = prog(t, 14.2, 0.4) * (1 - prog(t, 16.6, 0.4));
-  const ship = prog(t, 22.0, 0.5);
+  const retry = prog(t, T.tasks + 2.0, 0.4) * (1 - prog(t, T.docai - 0.4, 0.4));
+  const ship = prog(t, T.ship - 0.2, 0.5);
   return (
     <Scene>
       <Paper />
-      <Kicker color={C.gBlue}>Built on Google Cloud</Kicker>
+      <Kicker color={C.gBlue}>Built on Google Cloud · Mumbai region</Kicker>
 
       <svg style={{ position: "absolute", inset: 0 }} width={1920} height={1080}>
         {LINKS.map(([a, b, at]) => {
@@ -91,7 +104,7 @@ export const Cloud: React.FC = () => {
         <Box key={k} n={n}>
           {k === "run" && (
             <div style={{ marginTop: 22, display: "grid", gap: 12 }}>
-              {[["FastAPI API + the React app", 5.6], ["Analysis pipeline: read → check → prove → score", 6.2], ["Gemini chat agent with read-only tools", 6.8]].map(([s, at]) => (
+              {[["FastAPI API + the React app", T.run + 1.2], ["Analysis pipeline: read → check → prove → score", T.run + 1.8], ["Gemini chat agent with read-only tools", T.run + 2.4]].map(([s, at]) => (
                 <div key={s as string} style={{ opacity: prog(t, at as number, 0.4), fontFamily: F.mono, fontSize: 19, color: C.ink, background: "#efe9dc",
                   padding: "10px 14px", borderRadius: 6 }}>{s}</div>
               ))}
@@ -108,7 +121,7 @@ export const Cloud: React.FC = () => {
 
       <div style={{ position: "absolute", left: 110, right: 110, top: 838, opacity: ship, display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14 }}>
         {SHIP.map(([a, b], i) => {
-          const p = prog(t, 22.2 + i * 0.25, 0.4);
+          const p = prog(t, T.ship + i * 0.25, 0.4);
           return (
             <div key={a} style={{ opacity: p, transform: `translateY(${(1 - p) * 20}px)`, background: C.ink, color: "#fbf8f1", borderRadius: 8, padding: "12px 14px" }}>
               <div style={{ fontFamily: F.body, fontWeight: 600, fontSize: 19 }}>{a}</div>

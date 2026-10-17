@@ -17,68 +17,71 @@ To use your own recordings instead, record each line as its own file at the same
 ## 1. `hook.m4a` (12 s)
 
 > [0.5] Look at this hospital bill.
-> [2.4] The real total is hidden under a white box,
-> and a bigger one is typed on top.
-> [7.8] Would you catch it?
+> [2.4] The real total is hidden under a white box, and a bigger one is typed on top.
+> [7.8] Would your team catch it?
 
-## 2. `problem.m4a` (13 s)
+## 2. `why.m4a` (17 s)
 
-> [0.3] AI reads documents brilliantly.
-> [2.2] But it also makes things up.
-> [6.0] So we built ClaimLens.
-> [7.3] Gemini reads. Code decides. Every claim is proved.
+> [0.4] In India alone, health insurers lose up to ten thousand crore rupees a year to fraud, waste and abuse.
+> That's across more than three crore claims a year.
+> And with AI, faking a bill gets easier every day.
 
-## 3. `upload.m4a` (24 s)
+## 3. `problem.m4a` (16 s)
 
-> [0.3] A reviewer signs in with Google,
-> [3.6] and uploads the claim and the policy.
-> [9.1] Cloud Tasks runs the analysis in the background.
-> [14.0] Every page is read, and Gemini pulls out the facts.
-> [19.0] In under a minute, it's ready.
+> [0.3] Across Asia-Pacific, claims arrive as PDFs, scans and phone photos.
+> No reviewer can check every page.
+> So we built ClaimLens.
+> Gemini reads. Code decides. Every claim is proved.
 
-## 4. `results.m4a` (32 s)
+## 4. `upload.m4a` (25 s)
 
-> [0.4] Risk: one hundred out of one hundred.
-> [5.0] Gemini writes the summary. Code sets the score.
-> [9.2] Every finding is marked on its page.
-> This total uses a different font.
-> [15.7] This invoice was already used in another claim.
-> [21.7] And cataract is still in its waiting period,
-> [27.2] so the payable amount is zero.
+> [0.3] Sign in with Google, and drop in the claim and the policy.
+> [9.1] ClaimLens reads every page, and runs OCR on photos with Document AI.
+> [13.1] It confirms these are real insurance documents, then Gemini extracts the facts.
+> [19.0] In under a minute, the case file is ready.
 
-## 5. `proof.m4a` (15 s)
+## 5. `results.m4a` (33 s)
 
-> [0.4] Here's why you can trust it.
-> Every fact must quote its page.
-> [5.4] If the quote isn't there, it's dropped.
+> [0.4] Risk: one hundred out of one hundred. Recommendation: investigate.
+> [5.3] Every fact links back to the page it came from.
+> [9.7] Every problem is marked on the document: an amount in a different font, the real total hidden underneath,
+> an invoice already used in another claim, even on a phone photo.
+> The policy becomes a rulebook. A waiting period applies, line by line.
+> Payable: zero.
+
+## 6. `proof.m4a` (15 s)
+
+> [0.4] AI can make things up. So every fact must quote its page.
+> [5.4] No quote, no finding.
 > [9.8] A different number, or a missing "not", never passes.
 
-## 6. `agent.m4a` (34 s)
+## 7. `agent.m4a` (35 s)
 
-> [0.3] Now, the agent.
-> Reviewers can question Gemini about the case.
-> [4.3] It uses read-only tools,
-> [7.6] and every answer passes the same proof check.
-> [13.1] Draw a box on the bill, and ask about just that area.
-> [17.2] It adds up the lines, and the total doesn't fit.
-> [23.2] It can suggest changes, but only a human can apply them.
-> [28.3] The agent investigates. Code verifies. A human decides.
+> [0.3] And this is where it becomes agentic.
+> Reviewers question a Gemini agent that investigates the case with its own tools.
+> [8.6] Every answer is checked against the documents.
+> [14.1] Draw a box on any page, and ask about just that area.
+> [18.2] It does the maths, and spots the total that doesn't fit.
+> [24.2] It even proposes changes, but nothing happens until a human approves.
+> [29.3] The agent investigates. Code verifies. A human decides.
 
-## 7. `cloud.m4a` (28 s)
+## 8. `cloud.m4a` (33 s)
 
-> [0.5] All of it runs on Google Cloud.
-> [4.3] One Cloud Run service hosts everything.
-> [8.3] Files in Cloud Storage. Cases in Firestore.
-> [12.3] Cloud Tasks retries failures, and never runs a job twice.
-> [17.3] Document AI reads the scans. Gemini, on Vertex AI, reads the meaning.
-> [22.1] And every push is tested and deployed automatically.
+> [0.4] ClaimLens runs entirely on Google Cloud, in the Mumbai region.
+> Firebase signs reviewers in.
+> One Cloud Run service hosts the app, the pipeline and the agent, and scales to zero when idle.
+> Cloud Tasks runs every analysis reliably. Firestore and Cloud Storage keep the case file.
+> Document AI reads the scans. Gemini on Vertex AI reads the meaning.
+> Every release ships automatically, with no stored keys.
 
-## 8. `engineering.m4a` (14 s)
+## 9. `features.m4a` (15 s)
 
-> [0.5] Over six hundred tests run before anything ships.
-> [6.9] And when a forgery model failed our tests, we cut it.
+> [0.4] Edited files. Hidden text. Totals that don't add up.
+> Reused invoices. Missing pages. Policy limits.
+> One case file. Every problem, on its page.
 
-## 9. `close.m4a` (8 s)
+## 10. `close.m4a` (13 s)
 
-> [0.6] ClaimLens.
-> [1.8] It flags. A human decides.
+> [0.5] ClaimLens. AI that shows its work.
+> Every page read. Every rupee proved.
+> Built by Himanshi, Chitresh and Priyanshu.

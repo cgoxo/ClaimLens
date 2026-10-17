@@ -50,33 +50,33 @@ export const Agent: React.FC = () => (
   <Scene>
     <Paper />
     <Shots shots={[
-      { src: "12-chat-typed.png", from: 0, to: 4,
+      { src: "12-chat-typed.png", from: 0, to: 5,
         keys: [{ at: 0, x: 735, y: 400, zoom: 1 }, { at: 1.0, x: 340, y: 560, zoom: 1.55 }],
-        boxes: [{ from: 1.2, to: 4.2, x: 40, y: 636, w: 496, h: 66, label: "Ask in plain English", color: C.slate }] },
-      { src: "13-chat-thinking.png", from: 4, to: 7.4, keys: [{ at: 0, x: 340, y: 560, zoom: 1.55 }] },
-      { src: "14-chat-answer.png", from: 7.4, to: 13,
+        boxes: [{ from: 1.2, to: 5.2, x: 40, y: 636, w: 496, h: 66, label: "Ask in plain English", color: C.slate }] },
+      { src: "13-chat-thinking.png", from: 5, to: 8.4, keys: [{ at: 0, x: 340, y: 560, zoom: 1.55 }] },
+      { src: "14-chat-answer.png", from: 8.4, to: 14,
         keys: [{ at: 0, x: 340, y: 540, zoom: 1.7 }],
         boxes: [
           { from: 0.5, to: 5.6, x: 40, y: 517, w: 570, h: 94, label: "Verified: every quote found on its page", color: C.olive },
         ] },
-      { src: "15-area-typed.png", from: 13, to: 17,
+      { src: "15-area-typed.png", from: 14, to: 18,
         keys: [{ at: 0, x: 700, y: 420, zoom: 1.2 }],
         boxes: [
           { from: 0.4, to: 4.2, x: 860, y: 196, w: 180, h: 64, label: "Area drawn on the bill", color: C.amber },
           { from: 1.4, to: 4.2, x: 40, y: 669, w: 496, h: 60, color: C.slate },
         ] },
-      { src: "16-area-answer.png", from: 17, to: 23,
+      { src: "16-area-answer.png", from: 18, to: 24,
         keys: [{ at: 0, x: 340, y: 450, zoom: 1.6 }],
         boxes: [{ from: 0.6, to: 6.0, x: 40, y: 343, w: 570, h: 206, label: "13,500 + 22,000 + 8,000 + 2,000 = 45,500", color: C.olive }] },
-      { src: "17-proposal.png", from: 23, to: 32,
+      { src: "17-proposal.png", from: 24, to: 35,
         keys: [{ at: 0, x: 340, y: 480, zoom: 1.65 }],
         boxes: [
           { from: 0.6, to: 4.8, x: 54, y: 471, w: 542, h: 122, label: "A proposal, not an action", color: C.slate },
           { from: 2.4, to: 5.0, x: 66, y: 547, w: 70, h: 32, label: "Only a human clicks Apply" },
         ] },
     ]} />
-    <ToolPanel from={4.2} to={7.4} />
-    <Motto from={28.2} />
+    <ToolPanel from={5.2} to={8.4} />
+    <Motto from={29.2} />
     <Captions lines={[
       { from: 0.2, to: 4.0, text: "On a finished case, the reviewer can question a Gemini agent." },
       { from: 4.1, to: 7.4, text: "It answers by calling read-only tools over the case." },
