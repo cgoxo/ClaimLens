@@ -78,10 +78,19 @@ def decide(deps, case: Case, proposal_id: str, decision: Literal["apply", "ignor
     message, proposal = found
     if proposal.status != "pending" or not deps.db.claim_proposal(case.id, thread.id, message.id, proposal.id):
         raise NotPending(f"Proposal is {proposal.status}")
-    if decision == "ignore":
-        proposal = proposal.model_copy(update={"status": "ignored", "decided_by": by, "decided_at": now()})
-        outcome = None
-    else:
-        proposal, outcome = apply(deps, case, proposal, message.id, by)
+    outcome = None
+    try:
+        if decision == "ignore":
+            proposal = proposal.model_copy(update={"status": "ignored", "decided_by": by, "decided_at": now()})
+        else:
+            proposal, outcome = apply(deps, case, proposal, message.id, by)
+    except Exception as e:
+        log.exception("Applying proposal %s failed", proposal.id)
+        proposal = proposal.model_copy(update={"status": "failed", "error": str(e) or type(e).__name__})
+        try:
+            deps.db.update_proposal(case.id, thread.id, message.id, proposal)
+        except Exception:
+            log.exception("Could not record the failure of proposal %s", proposal.id)
+        return proposal, None
     deps.db.update_proposal(case.id, thread.id, message.id, proposal)
     return proposal, outcome

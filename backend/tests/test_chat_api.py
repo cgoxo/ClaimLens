@@ -188,3 +188,19 @@ def test_new_chat_route(app, client, case_id):
     assert got["thread"]["id"] == fresh["id"] and got["messages"] == []
     assert [p["id"] for p in got["previous"]] == [first["id"]]
     assert got["previous"][0]["summary"] == "Summary." and "created_at" in got["previous"][0]
+
+
+def test_apply_exception_marks_failed_not_500(app, client, case_id, monkeypatch):
+    pid = _ask_proposal(app, client, case_id)
+
+    def boom(*a, **k):
+        raise RuntimeError("db down")
+
+    with monkeypatch.context() as m:
+        m.setattr(app.state.deps.db, "get_finding_versions", boom)
+        r = client.post(_url(case_id, f"/proposals/{pid}/apply"), headers=A)
+    assert r.status_code == 200
+    assert r.json()["proposal"]["status"] == "failed" and "db down" in r.json()["proposal"]["error"]
+    assert r.json()["current"] is None
+    stored = client.get(_url(case_id), headers=A).json()["messages"][-1]["proposals"][0]
+    assert stored["status"] == "failed"
