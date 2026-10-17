@@ -1,6 +1,7 @@
 import React from "react";
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { C, F } from "../theme";
+import { VOICE } from "../timeline";
 
 export const ease = Easing.bezier(0.65, 0, 0.35, 1);
 export const easeOut = Easing.bezier(0.16, 1, 0.3, 1);
@@ -35,8 +36,11 @@ export const Paper: React.FC<{ dark?: boolean }> = ({ dark }) => (
 export type Line = { from: number; to: number; text: React.ReactNode };
 
 /** Bottom captions: one line at a time, readable with the sound off */
-export const Captions: React.FC<{ lines: Line[]; dark?: boolean }> = ({ lines, dark }) => {
+export const Captions: React.FC<{ lines: Line[]; dark?: boolean | ((t: number) => boolean); narrated?: boolean }> = ({ lines, dark: darkAt, narrated }) => {
   const { t } = useT();
+  const dark = typeof darkAt === "function" ? darkAt(t) : darkAt;
+  // with the voiceover on, the narration's own captions replace each scene's written ones
+  if (VOICE && !narrated) return null;
   const line = lines.find((l) => t >= l.from && t < l.to);
   if (!line) return null;
   const o = Math.min(prog(t, line.from, 0.3), 1 - prog(t, line.to - 0.25, 0.25));

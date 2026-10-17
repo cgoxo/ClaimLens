@@ -5,15 +5,18 @@ export const SCENES = [
   { id: "upload", seconds: 24 },
   { id: "results", seconds: 32 },
   { id: "proof", seconds: 15 },
-  { id: "agent", seconds: 32 },
+  { id: "agent", seconds: 33 },
   { id: "cloud", seconds: 28 },
   { id: "engineering", seconds: 14 },
-  { id: "close", seconds: 10 },
+  { id: "close", seconds: 9 },
 ] as const;
 
 export type SceneId = (typeof SCENES)[number]["id"];
 
-// Set to true once the voiceover is saved as one file per scene: public/voice/<scene id>.m4a (hook.m4a, problem.m4a, ...)
-export const VOICE = false;
+// Narration on: lines and timings come from src/voiceTiming.ts, written by voice.mjs from SCRIPT.md
+export const VOICE = true;
+
+// Quiet background bed (public/music.wav, made by music.mjs); its level drops when the voice is on
+export const MUSIC = true;
 
 export const LIVE_URL = "claimlens-api-538594533263.asia-south1.run.app";

@@ -19,3 +19,14 @@ node stills.mjs 240 960 # renders review frames to out/stills/
 | `SCRIPT.md` | The voiceover, one file per scene in `public/voice/` |
 
 Positions in scenes (camera keys, boxes, cursor) are in the page's CSS pixels: the captured viewport is 1470 x 745.
+
+## Sound
+
+```bash
+node music.mjs                          # public/music.wav: the quiet background bed (made in code)
+node voice.mjs "Tara (English (India))" # narration from SCRIPT.md, one clip per line, and src/voiceTiming.ts
+npm run render
+npx remotion ffmpeg -i out/claimlens-demo.mp4 -c:v copy -af "loudnorm=I=-16:TP=-1.5:LRA=11" -ar 48000 -c:a aac -b:a 192k out/claimlens-demo-final.mp4
+```
+
+The last step levels the sound to the usual loudness for online video (-16 LUFS).

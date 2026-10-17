@@ -20,6 +20,8 @@ type Props = {
   cropTop?: number;
   frameW?: number;
   enterAt?: number;
+  /** fill the whole video frame instead of sitting in a browser window */
+  full?: boolean;
 };
 
 const ease = Easing.bezier(0.65, 0, 0.35, 1);
@@ -49,17 +51,19 @@ function cursorAt(points: Point[], t: number) {
   return points[points.length - 1];
 }
 
-export const BrowserShot: React.FC<Props> = ({ src, keys = [], boxes = [], cursor, cropTop = 422, frameW = 1640, enterAt = 0 }) => {
+export const BrowserShot: React.FC<Props> = ({ src, keys = [], boxes = [], cursor, cropTop = 422, frameW = 1640, enterAt = 0, full = true }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = frame / fps;
-  const vw = frameW;
-  const vh = (frameW / PAGE_W) * PAGE_H;
+  const vw = full ? 1920 : frameW;
+  const vh = full ? 1080 : (frameW / PAGE_W) * PAGE_H;
   const k = vw / PAGE_W;
   const cam = camera(keys, t);
   const s = k * cam.zoom;
-  const left = Math.min(0, Math.max(vw - PAGE_W * s, vw / 2 - cam.x * s));
-  const top = Math.min(0, Math.max(vh - PAGE_H * s, vh / 2 - cam.y * s));
+  // follow the camera, but never show past the page's edges; a page smaller than the view is centred
+  const fit = (view: number, size: number, at: number) => size <= view ? (view - size) / 2 : Math.min(0, Math.max(view - size, view / 2 - at * s));
+  const left = fit(vw, PAGE_W * s, cam.x);
+  const top = fit(vh, PAGE_H * s, cam.y);
   const toScreen = (x: number, y: number) => ({ x: left + x * s, y: top + y * s });
 
   const rise = interpolate(t - enterAt, [0, 0.6], [40, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease });
@@ -67,18 +71,20 @@ export const BrowserShot: React.FC<Props> = ({ src, keys = [], boxes = [], curso
 
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
-      <div style={{
+      <div style={full ? { width: vw, height: vh, overflow: "hidden", background: C.paper, opacity: fade } : {
         width: vw, borderRadius: 14, overflow: "hidden", background: C.sheet, transform: `translateY(${rise - 30}px)`, opacity: fade,
         boxShadow: "0 40px 80px rgba(30,28,25,0.25), 0 8px 20px rgba(30,28,25,0.12)", border: `1px solid ${C.rule}`,
       }}>
-        <div style={{ height: 46, display: "flex", alignItems: "center", gap: 10, padding: "0 18px", background: "#ebe5d8", borderBottom: `1px solid ${C.rule}` }}>
+        {!full && <div style={{ height: 46, display: "flex", alignItems: "center", gap: 10, padding: "0 18px", background: "#ebe5d8", borderBottom: `1px solid ${C.rule}` }}>
           {["#ec6a5e", "#f4bf4f", "#61c554"].map((c) => <div key={c} style={{ width: 13, height: 13, borderRadius: 7, background: c }} />)}
           <div style={{ marginLeft: 24, flex: 1, height: 28, borderRadius: 14, background: C.sheet, display: "flex", alignItems: "center", padding: "0 14px", gap: 8, fontFamily: F.body, fontSize: 15, color: C.inkSoft }}>
             <span style={{ fontSize: 13 }}>🔒</span>{LIVE_URL}
           </div>
-        </div>
+        </div>}
         <div style={{ position: "relative", width: vw, height: vh, overflow: "hidden" }}>
-          <Img src={staticFile(`shots/${src}`)} style={{ position: "absolute", left, top: top - (cropTop / 2) * s, width: PAGE_W * s }} />
+          <div style={{ position: "absolute", left, top, width: PAGE_W * s, height: PAGE_H * s, overflow: "hidden", background: C.paper }}>
+            <Img src={staticFile(`shots/${src}`)} style={{ position: "absolute", left: 0, top: -(cropTop / 2) * s, width: PAGE_W * s }} />
+          </div>
           {boxes.map((b, i) => {
             const on = interpolate(t, [b.from, b.from + 0.35, b.to - 0.25, b.to], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
             if (on <= 0) return null;
@@ -111,6 +117,12 @@ export const BrowserShot: React.FC<Props> = ({ src, keys = [], boxes = [], curso
               </>
             );
           })()}
+          {full && (
+            <div style={{ position: "absolute", top: 22, right: 26, display: "flex", alignItems: "center", gap: 10, background: "rgba(20,19,15,0.82)",
+              color: "#fbf8f1", fontFamily: F.mono, fontSize: 17, padding: "8px 14px", borderRadius: 20 }}>
+              <span style={{ width: 9, height: 9, borderRadius: 5, background: "#e5484d" }} />LIVE · {LIVE_URL}
+            </div>
+          )}
         </div>
       </div>
     </AbsoluteFill>

@@ -28,8 +28,8 @@ export const Problem: React.FC = () => {
       <AbsoluteFill style={{ opacity: 1 - dark }}><Paper /></AbsoluteFill>
 
       <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", gap: 30, opacity: dark }}>
-        <Statement at={0.2} out={5.3}>Language models read documents brilliantly.</Statement>
-        <Statement at={1.8} out={5.3} color="#e8a39d">They also make things up.</Statement>
+        <Statement at={0.2} out={5.3}>AI reads documents brilliantly.</Statement>
+        <Statement at={2.0} out={5.3} color="#e8a39d">It also makes things up.</Statement>
       </AbsoluteFill>
 
       <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", opacity: title }}>
