@@ -11,6 +11,9 @@ CardRole = Literal["claim", "policy"]
 PageKind = Literal["digital", "scanned", "scanned_with_text", "image", "unreadable"]
 SEVERITY_ORDER: list[str] = ["critical", "high", "medium", "low", "coverage"]
 
+Category = Literal["room", "icu", "surgery", "doctor", "nursing", "investigations", "medicines", "consumables",
+                   "implants", "ambulance", "other"]
+
 BBox = tuple[float, float, float, float]
 
 
@@ -91,23 +94,88 @@ class Citation(BaseModel):
 
 
 class Review(BaseModel):
-    action: Literal["accept", "dismiss"]
+    action: Literal["accept", "dismiss", "restore"]  # "restore" is stored on versions only; a restored finding has review=None
     note: str = ""
     by: str
     at: datetime = PydField(default_factory=now)
 
 
+class LineDeduction(BaseModel):
+    """Rupees a finding takes off a bill line. bill and line index ClaimFacts.bills[bill].line_items[line];
+    line = -1 means the whole bill, bill = -1 means claim level."""
+
+    bill: int
+    line: int
+    amount: float
+
+
 class Finding(BaseModel):
     id: str
-    check: Literal["tamper", "story", "duplicate", "cards", "coverage"]
+    check: Literal["tamper", "story", "duplicate", "cards", "coverage", "bill_story"]
     code: str
     severity: Severity
     title: str
     detail: str = ""
     citations: list[Citation] = []
     amount_not_payable: float = 0
+    deductions: list[LineDeduction] = []
+    items: list[str] = []
     verified: bool = False
     review: Review | None = None
+
+
+# --- settlement and outcome ---------------------------------------------------
+
+Action = Literal["investigate", "query", "not_payable", "approve_part", "approve"]
+
+
+class Deduction(BaseModel):
+    amount: float
+    reason: str
+    finding_id: str | None = None
+    rule: Citation | None = None
+
+
+class SettlementLine(BaseModel):
+    bill: int
+    line: int
+    desc: str
+    category: Category
+    claimed: float
+    deductions: list[Deduction] = []
+    payable: float
+
+
+class Note(BaseModel):
+    text: str
+    affects_amount: bool = False
+
+
+class Settlement(BaseModel):
+    lines: list[SettlementLine]
+    claimed: float | None
+    whole_claim: Deduction | None = None
+    claim_level: list[Deduction] = []
+    subtotal: float
+    sub_limit: Deduction | None = None
+    deductible: Deduction | None = None
+    co_pay: Deduction | None = None
+    si_cap: Deduction | None = None
+    payable: float | None  # None when the claimed amount is unknown
+    notes: list[Note] = []
+
+
+class Recommendation(BaseModel):
+    action: Action
+    reasons: list[str]
+
+
+class Outcome(BaseModel):
+    score: int
+    risk: Literal["low", "review", "high"]
+    payable: float | None
+    recommendation: Recommendation | None = None
+    settlement: Settlement | None = None
 
 
 class Case(BaseModel):
@@ -124,6 +192,9 @@ class Case(BaseModel):
     score: int | None = None
     risk: Literal["low", "review", "high"] | None = None
     payable: float | None = None
+    analysis: Outcome | None = None  # what the first run decided
+    current: Outcome | None = None  # after the reviewer's accepts and dismissals
+    rules_not_verified: list[dict] = []
     summary: str | None = None
     dropped_findings: list[dict] = []
     context: dict | None = None  # grounded claim/policy facts, saved right after Extract
@@ -156,6 +227,9 @@ class Room(BaseModel):
 class LineItem(BaseModel):
     desc: str
     amount: Fact | None = None
+    category: Category = "other"
+    days: Fact | None = None
+    rate: Fact | None = None
 
 
 class Bill(BaseModel):
@@ -180,15 +254,76 @@ class ClaimFacts(BaseModel):
     names: list[Fact] = []
     procedures: list[Procedure] = []
     room: Room | None = None
+    patient_age: Fact | None = None
+    room_type: Fact | None = None
     bills: list[Bill] = []
 
 
-class WaitingPeriod(BaseModel):
-    condition: str
-    months: int
+class Rule(BaseModel):
+    """A policy rule with its proof: the clause, and a quote from the page it sits on."""
+
     clause: str = ""
     page: int
     quote: str
+
+
+class WaitingPeriod(Rule):
+    condition: str
+    months: int
+
+
+class CoPay(Rule):
+    percent: float
+    applies: Literal["all", "age_over", "other"] = "all"
+    age: int | None = None
+    condition_text: str = ""
+
+
+class Deductible(Rule):
+    amount: float
+    per: Literal["claim", "year"] = "claim"
+
+
+class Limit(Rule):
+    """Per day. percent_of_si=1 means 1%."""
+
+    amount: float | None = None
+    percent_of_si: float | None = None
+
+
+class RoomLimit(Limit):
+    room_type_text: str = ""
+
+
+class SubLimit(Limit):
+    applies_to: str
+    per: Literal["claim", "eye", "year"] = "claim"
+
+
+class Exclusion(Rule):
+    what: str
+
+
+class NonPayable(Rule):
+    items: list[str] = []
+    standard_list: bool = False
+
+
+class Window(Rule):
+    pre_days: int | None = None
+    post_days: int | None = None
+
+
+class InitialWaiting(Rule):
+    days: int
+
+
+class PreExisting(Rule):
+    months: int
+
+
+class ProportionateDeduction(Rule):
+    pass
 
 
 class PolicyFacts(BaseModel):
@@ -196,8 +331,19 @@ class PolicyFacts(BaseModel):
     policy_number: Fact | None = None
     start_date: Fact | None = None
     sum_insured: Fact | None = None
-    room_rent_limit_per_day: Fact | None = None
+    room_rent_limit_per_day: Fact | None = None  # older cases; newer ones use room_limit
     waiting_periods: list[WaitingPeriod] = []
+    co_pays: list[CoPay] = []
+    deductible: Deductible | None = None
+    room_limit: RoomLimit | None = None
+    icu_limit: Limit | None = None
+    proportionate_deduction: ProportionateDeduction | None = None
+    sub_limits: list[SubLimit] = []
+    initial_waiting: InitialWaiting | None = None
+    pre_existing: PreExisting | None = None
+    exclusions: list[Exclusion] = []
+    non_payable: NonPayable | None = None
+    window: Window | None = None
 
 
 class DocLabel(BaseModel):
@@ -217,3 +363,15 @@ class CoverageItem(BaseModel):
     page: int | None = None
     quote: str = ""
     amount_not_payable: float = 0
+
+
+class StoryVerdict(BaseModel):
+    """Whether one bill item fits the treatment story, with a quote from the bill (and the story if any)."""
+
+    item: str
+    verdict: Literal["fits", "unusual", "unrelated"]
+    reason: str = ""
+    bill_page: int
+    bill_quote: str
+    story_page: int | None = None
+    story_quote: str = ""

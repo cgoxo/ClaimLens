@@ -147,3 +147,98 @@ def test_running_case_not_unseen(client):
     assert _row(client, "r1")["unseen"] is False
     client.get("/api/cases/r1", headers=A)
     assert db.get_case("r1").seen_at is None
+
+
+def _review(client, cid, fid, action, headers=A):
+    return client.post(f"/api/cases/{cid}/findings/{fid}/review", json={"action": action}, headers=headers)
+
+
+def test_dismiss_lowers_score_and_restore_brings_it_back(client):
+    cid = _upload(client).json()["case_id"]
+    case = client.get(f"/api/cases/{cid}", headers=A).json()
+    criticals = [f["id"] for f in case["findings"] if f["severity"] == "critical"]
+    assert criticals
+    before = case["current"]["score"]  # capped at 100, so dismiss every critical to see it drop
+    for fid in criticals:
+        r = _review(client, cid, fid, "dismiss")
+    assert r.json()["current"]["score"] < before
+    assert client.get(f"/api/cases/{cid}", headers=A).json()["score"] == r.json()["current"]["score"]
+    for fid in criticals:
+        r = _review(client, cid, fid, "restore")
+    assert r.json()["review"] is None and r.json()["current"]["score"] == before
+
+
+def test_dismiss_room_rent_restores_payable(client):
+    cid = _upload(client).json()["case_id"]
+    case = client.get(f"/api/cases/{cid}", headers=A).json()
+    by_code = {f["code"]: f["id"] for f in case["findings"]}
+    excess = next(f for f in case["findings"] if f["code"] == "room_rent_limit")["amount_not_payable"]
+    start = case["payable"]  # the sample is inside a waiting period, so nothing is payable
+
+    def payable(fid, action):
+        return _review(client, cid, fid, action).json()["current"]["payable"]
+
+    mid = payable(by_code["waiting_period"], "dismiss")
+    assert mid > start
+    assert payable(by_code["room_rent_limit"], "dismiss") == pytest.approx(mid + excess)
+    assert payable(by_code["room_rent_limit"], "restore") == pytest.approx(mid)
+    assert payable(by_code["waiting_period"], "restore") == start
+
+
+def test_versions_listed(client):
+    cid = _upload(client).json()["case_id"]
+    fid = client.get(f"/api/cases/{cid}", headers=A).json()["findings"][0]["id"]
+    _review(client, cid, fid, "dismiss")
+    _review(client, cid, fid, "restore")
+    versions = client.get(f"/api/cases/{cid}/findings/{fid}/versions", headers=A).json()
+    assert [v["version"] for v in versions] == [1, 2, 3]
+    assert [v["action"] for v in versions] == ["analysis", "dismiss", "restore"]
+    assert versions[0]["by"] == "pipeline" and versions[1]["by"] == "a@x.com"
+    assert versions[1]["finding"]["review"]["action"] == "dismiss" and versions[2]["finding"]["review"] is None
+
+
+def test_old_case_review_keeps_payable(settings):
+    from claimlens.models import Case, Finding
+    deps = build_deps(settings)
+    client = TestClient(create_app(settings, deps))
+    deps.db.create_case(Case(id="old", owner_email="a@x.com", status="READY", score=40, risk="review", payable=123))
+    deps.db.put_findings("old", [Finding(id="f1", check="tamper", code="font_outlier", severity="critical",
+                                         title="Font")])
+    r = _review(client, "old", "f1", "dismiss")
+    assert r.status_code == 200
+    case = deps.db.get_case("old")
+    assert case.payable == 123 and case.score == 0 and case.risk == "low"
+    assert case.current.payable == 123 and case.current.score == 0
+    assert case.current.recommendation is None and case.current.settlement is None
+    assert r.json()["current"]["recommendation"] is None and r.json()["current"]["payable"] == 123
+
+
+def test_other_user_cannot_list_versions(client):
+    cid = _upload(client).json()["case_id"]
+    fid = client.get(f"/api/cases/{cid}", headers=A).json()["findings"][0]["id"]
+    assert client.get(f"/api/cases/{cid}/findings/{fid}/versions",
+                      headers={"X-Dev-User": "b@x.com"}).status_code == 404
+
+
+def test_restore_needs_a_dismissed_finding(client):
+    cid = _upload(client).json()["case_id"]
+    fid = client.get(f"/api/cases/{cid}", headers=A).json()["findings"][0]["id"]
+    r = _review(client, cid, fid, "restore")
+    assert r.status_code == 409 and r.json()["detail"] == "Only a dismissed finding can be restored"
+    _review(client, cid, fid, "accept")
+    assert _review(client, cid, fid, "restore").status_code == 409
+    _review(client, cid, fid, "dismiss")
+    assert _review(client, cid, fid, "restore").status_code == 200
+
+
+def test_old_case_review_without_context_updates_score(settings):
+    from claimlens.models import Case, Finding
+    deps = build_deps(settings)
+    client = TestClient(create_app(settings, deps))
+    deps.db.create_case(Case(id="old2", owner_email="a@x.com", status="READY", score=40, risk="review", payable=5,
+                             context={"claim": {"amount_claimed": "garbage"}}))
+    deps.db.put_findings("old2", [Finding(id="f1", check="tamper", code="font_outlier", severity="critical",
+                                          title="Font")])
+    assert _review(client, "old2", "f1", "dismiss").status_code == 200
+    case = deps.db.get_case("old2")
+    assert case.score == 0 and case.risk == "low" and case.payable == 5

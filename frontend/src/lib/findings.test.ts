@@ -3,7 +3,7 @@ import { citationLabel, groupFindings } from "./findings";
 
 const f = (id: string, severity: Finding["severity"]): Finding => ({
   id, severity, check: "story", code: id, title: id, detail: "", citations: [],
-  amount_not_payable: 0, verified: true, review: null,
+  amount_not_payable: 0, items: [], verified: true, review: null,
 });
 
 test("groups in severity order, skipping empty groups and keeping order inside a group", () => {

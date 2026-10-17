@@ -13,7 +13,9 @@ invoices and items the policy won't cover**, and marks the page each problem is 
 
 **How a claim is judged:** code makes every decision that has a right answer (fonts, hidden text, file history, dates,
 sums, duplicate invoices, waiting-period and room-rent maths). Gemini only reads messy text, and every quote it
-returns must be found on the cited page, or the finding is dropped.
+returns must be found on the cited page, or the finding is dropped. The policy is read into a rulebook where every
+rule is proved on its page; the item-by-item settlement and the recommendation are worked out in code, and are
+recalculated when a finding is dismissed or restored.
 
 **Run locally:** `cd backend && make venv && make seed && make dev`, then open http://localhost:5173 and click
 **Try the sample claim**.

@@ -4,6 +4,8 @@ Date: 2026-10-16 · Status: approved in chat, awaiting written-spec review
 
 Sub-project **C** of five (A quick wins: live · B two forms, job queue, document check: live · **C pixel forensics** · D chat · E evaluation).
 
+> **Phase 1 result (2026-10-16): CAT-Net dropped.** Measured on 360 test photos ([report](../../eval/forensics-2026-10-16.md)), it scored AUC 0.40 on Gemini edits and 0.26 after WhatsApp, with up to 14% false positives. Its heatmap marks all dense print as edited: genuine numbers had a median score of 0.92, edited ones 0.91 and blank paper 0.02. By the keep rule in §3.4, the GPU job is not built. Its code, the `forensics.tf` Terraform and the Cloud Run Job were removed. Sections on CAT-Net below (§2, §4–§6, §8) are kept as the record of what was planned. **Kept:** `ela`, and `chars` once its threshold is reworked (at 5% false positives it caught nothing).
+
 ## 1. Goal and success criteria
 
 **Goal.** Flag numbers on **photographed or scanned** claim pages whose pixels look edited, including AI inpainting, the attack from AIForge-Doc (arXiv 2602.20569). Each flag is a finding with a marker on the exact number. The flag is never proof on its own: it becomes strong evidence only when the text cross-checks also disagree.

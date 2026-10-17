@@ -6,6 +6,7 @@ import pytest
 
 from eval.scenarios.forgeries import FORGERIES, pick
 from eval.scenarios.recipe import make_recipe
+from eval.scenarios.run import plan
 from eval.scenarios.targets import LocalTarget
 from eval.scenarios.truth import truth_of
 
@@ -24,6 +25,7 @@ def _check(seed: int, names: list[str], fmt: str, target: LocalTarget):
     assert result.status == truth.status, (names, fmt)
     assert result.codes == truth.codes, (names, fmt)
     assert result.band == truth.band, (names, fmt, result.codes)
+    assert result.recommendation == truth.recommendation, (names, fmt, result.codes)
     if truth.payable is None:
         assert result.payable is None
     else:
@@ -49,6 +51,23 @@ def test_combinations_offline(target):
     for seed in range(100, 130):
         recipe = make_recipe(seed, "off")
         _check(seed, pick(rng, recipe), str(rng.choice(["one_pdf", "split_files"])), target)
+
+
+def test_offline_run_matches_truth(target):
+    """The scenario run's own plan, 30 seeds: not one payable or recommendation differs from the truth."""
+    wrong = []
+    for seed, names, fmt, recipe in plan(30, 7, ["one_pdf", "split_files", "photos"], "off"):
+        truth = truth_of(recipe, names, fmt, ocr=False)
+        result = target.run(recipe, names, fmt, truth)
+        assert result.error is None, (seed, result.error)
+        if truth.payable is None or result.payable is None:
+            paid = truth.payable is None and result.payable is None
+        else:
+            paid = abs(result.payable - truth.payable) <= 1
+        if not paid or result.recommendation != truth.recommendation:
+            wrong.append((seed, names, fmt, truth.payable, result.payable, truth.recommendation,
+                          result.recommendation))
+    assert wrong == []
 
 
 def test_photos_offline_never_crash(target):

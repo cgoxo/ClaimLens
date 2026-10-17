@@ -16,6 +16,7 @@ class Ctx:
     policy_facts: PolicyFacts | None = None
     cards: list[Card] = field(default_factory=list)  # empty for cases from before cards
     skip_pages: set[tuple[str, int]] = field(default_factory=set)  # (doc, page) kept from the AI: duplicates
+    rules_not_verified: list[dict] = field(default_factory=list)  # rules whose quote is not on their page
 
     def page_text(self, doc: str, page: int) -> str:
         return next((p.text for p in self.read.pages if p.doc == doc and p.page == page), "")

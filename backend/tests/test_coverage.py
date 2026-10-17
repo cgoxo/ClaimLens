@@ -89,3 +89,209 @@ def test_coverage_citations_get_a_box_on_the_policy_page(ctx):
     found = {f.code: f for f in check_coverage(ctx)}
     for code in ("waiting_period", "room_rent_limit"):
         assert found[code].citations[0].bbox is not None, code
+
+
+# --- line deductions ----------------------------------------------------------
+
+from claimlens.models import (Bill, Fact, LineDeduction, LineItem, Limit, NonPayable,  # noqa: E402
+                              ProportionateDeduction, RoomLimit, Window)
+
+
+def _fact(value):
+    return Fact(value=value, page=3, quote=str(value))
+
+
+def _line(desc, amount, category="other", days=None, rate=None):
+    return LineItem(desc=desc, amount=_fact(amount), category=category,
+                    days=_fact(days) if days is not None else None,
+                    rate=_fact(rate) if rate is not None else None)
+
+
+def _only(ctx, code):
+    found = [f for f in check_coverage(ctx) if f.code == code]
+    assert len(found) == 1, [f.code for f in check_coverage(ctx)]
+    return found[0]
+
+
+def test_room_excess_is_a_line_deduction(ctx):
+    f = _only(ctx, "room_rent_limit")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=4500)]
+    assert f.amount_not_payable == 4500
+    assert f.items == ["Room charges (3 days x Rs 4,500)"]
+
+
+def _room_case(ctx, proportionate):
+    ctx.policy_facts.room_limit = RoomLimit(clause="2.1", page=1, quote="(Rs 3,000 per day)", amount=3000)
+    if proportionate:
+        ctx.policy_facts.proportionate_deduction = ProportionateDeduction(
+            clause="2.2", page=1, quote="proportionate deduction")
+    ctx.claim_facts.bills = [
+        Bill(page=3, kind="hospital", line_items=[_line("Ward", 13500, "room", 3, 4500),
+                                                   _line("Dr visit", 9000, "doctor")]),
+        Bill(page=4, kind="pharmacy", line_items=[_line("Tablets", 6000, "medicines")]),
+    ]
+
+
+def test_proportionate_deduction_reduces_doctor_not_medicines(ctx):
+    _room_case(ctx, True)
+    f = _only(ctx, "room_rent_limit")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=4500), LineDeduction(bill=0, line=1, amount=3000)]
+    assert f.amount_not_payable == 7500
+
+
+def test_no_proportionate_without_clause(ctx):
+    _room_case(ctx, False)
+    f = _only(ctx, "room_rent_limit")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=4500)]
+
+
+def test_icu_limit(ctx):
+    ctx.policy_facts.sum_insured = _fact("Rs 3,00,000")
+    ctx.policy_facts.icu_limit = Limit(clause="2.3", page=1, quote="ICU", percent_of_si=2)
+    ctx.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[_line("ICU stay", 24000, "icu", 2, 12000)])]
+    f = _only(ctx, "icu_limit")
+    assert f.severity == "coverage"
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=12000)]
+    assert f.amount_not_payable == 12000
+
+
+def test_non_payable_standard_list(ctx):
+    ctx.policy_facts.non_payable = NonPayable(clause="4.2", page=3, quote="non-payable items", standard_list=True)
+    ctx.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[_line("Admission kit", 800),
+                                                                       _line("Surgeon", 5000, "surgery")])]
+    f = _only(ctx, "non_payable_items")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=800)]
+    assert f.items == ["Admission kit"] and f.amount_not_payable == 800
+
+
+def test_pharmacy_after_post_window(ctx):
+    ctx.policy_facts.window = Window(clause="5.1", page=3, quote="post-hospitalisation", pre_days=30, post_days=60)
+    ctx.claim_facts.bills = [
+        Bill(page=4, kind="pharmacy", date=_fact("27-May-2026"), line_items=[_line("Tablets", 3000)], total=_fact(3000)),
+        Bill(page=5, kind="pharmacy", date=_fact("20-Mar-2026"), line_items=[_line("Tablets", 900)]),
+        Bill(page=6, kind="pharmacy", line_items=[_line("Tablets", 900)]),
+    ]
+    f = _only(ctx, "bill_outside_cover_window")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=3000)]
+
+
+def test_not_covered_maps_to_line(tmp_path):
+    items = [{"item": "Cosmetic laser", "verdict": "not_covered", "clause": "4.1", "page": 3,
+              "quote": "Cosmetic treatment, dental treatment"}]
+    c = _with_coverage(tmp_path, items)
+    c.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[_line("Surgeon", 5000),
+                                                                     _line("Cosmetic laser therapy", 2500)])]
+    f = _only(c, "not_covered")
+    assert f.deductions == [LineDeduction(bill=0, line=1, amount=2500)]
+    assert f.amount_not_payable == 2500
+
+
+def test_unmatched_item_is_a_claim_level_deduction(tmp_path):
+    items = [{"item": "Whitening", "verdict": "not_covered", "clause": "4.1", "page": 3,
+              "quote": "Cosmetic treatment, dental treatment", "amount_not_payable": 700}]
+    f = _only(_with_coverage(tmp_path, items), "not_covered")
+    assert f.deductions == [LineDeduction(bill=-1, line=-1, amount=700)]
+
+
+def test_waiting_period_deducts_the_claim(ctx):
+    f = _only(ctx, "waiting_period")
+    assert f.deductions == [LineDeduction(bill=-1, line=-1, amount=51500)]
+    assert f.amount_not_payable == 51500
+
+
+# --- fix round 1 ----------------------------------------------------------------
+
+def test_two_items_on_one_line_deduct_it_once(tmp_path):
+    items = [{"item": name, "verdict": "not_covered", "clause": "4.1", "page": 3,
+              "quote": "Cosmetic treatment, dental treatment"} for name in ("Cosmetic laser", "Laser therapy")]
+    c = _with_coverage(tmp_path, items)
+    c.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[_line("Cosmetic laser therapy", 2500)])]
+    f = _only(c, "not_covered")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=2500)]
+    assert f.items == ["Cosmetic laser therapy"] and f.amount_not_payable == 2500
+
+
+def test_room_excess_is_capped_at_the_line_amount(ctx):
+    _room_case(ctx, False)
+    ctx.claim_facts.bills[0].line_items[0] = _line("Ward", 2000, "room", 3, 4500)
+    f = _only(ctx, "room_rent_limit")
+    assert f.deductions == [LineDeduction(bill=0, line=0, amount=2000)]
+
+
+def test_room_line_is_not_also_proportionately_cut(ctx):
+    _room_case(ctx, True)
+    ctx.claim_facts.bills[0].line_items[0] = _line("Nursing - room", 13500, "nursing", 3, 4500)
+    ctx.claim_facts.bills[0].line_items[1:] = [_line("Dr visit", 9000, "doctor")]
+    f = _only(ctx, "room_rent_limit")
+    assert [d for d in f.deductions if d.line == 0] == [LineDeduction(bill=0, line=0, amount=4500)]
+
+
+def test_icu_words_need_a_whole_word(ctx):
+    ctx.policy_facts.icu_limit = Limit(clause="2.3", page=1, quote="ICU", amount=6000)
+    ctx.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[
+        _line("Particulars of stay", 9000, "other", 2, 12000), _line("Bathroom fittings", 500, "other", 1, 9000)])]
+    assert [f for f in check_coverage(ctx) if f.code == "icu_limit"] == []
+    ctx.policy_facts.room_limit = RoomLimit(clause="2.1", page=1, quote="(Rs 3,000 per day)", amount=3000)
+    assert [d for f in check_coverage(ctx) if f.code == "room_rent_limit" for d in f.deductions
+            if d.bill == 0 and d.line == 1] == []
+
+
+def test_coverage_item_with_icu_letters_is_not_skipped(tmp_path):
+    items = [{"item": "Ventricular septal defect repair", "verdict": "not_covered", "clause": "4.1", "page": 3,
+              "quote": "Cosmetic treatment, dental treatment", "amount_not_payable": 900}]
+    c = _with_coverage(tmp_path, items)
+    c.policy_facts.icu_limit = Limit(clause="2.3", page=1, quote="ICU", amount=6000)
+    c.claim_facts.bills = [Bill(page=3, kind="hospital", line_items=[_line("ICU stay", 24000, "icu", 2, 12000)])]
+    assert _only(c, "not_covered").amount_not_payable == 900
+
+
+def _window_ctx(ctx, total):
+    ctx.policy_facts.window = Window(clause="5.1", page=3, quote="post-hospitalisation", pre_days=30, post_days=60)
+    ctx.claim_facts.bills = [Bill(page=4, kind="pharmacy", date=_fact("27-May-2026"),
+                                  line_items=[_line("Tablets", 3000), _line("Syrup", 2000)], total=_fact(total))]
+
+
+def _settled_window(ctx, total):
+    from claimlens.pipeline.settlement import settle
+    _window_ctx(ctx, total)
+    f = _only(ctx, "bill_outside_cover_window")
+    return f, settle(None, ctx.claim_facts, [f])
+
+
+def test_outside_window_discounted_total_removes_every_line(ctx):
+    f, s = _settled_window(ctx, 4500)
+    assert f.amount_not_payable == 5000
+    assert [x.payable for x in s.lines] == [0, 0] and s.notes == []
+
+
+def test_outside_window_taxed_total_removes_every_line_without_a_note(ctx):
+    f, s = _settled_window(ctx, 5500)
+    assert f.amount_not_payable == 5000
+    assert [x.payable for x in s.lines] == [0, 0] and not any(n.affects_amount for n in s.notes)
+
+
+def test_outside_window_bill_with_only_a_total_uses_the_total(ctx):
+    ctx.policy_facts.window = Window(clause="5.1", page=3, quote="post-hospitalisation", pre_days=30, post_days=60)
+    ctx.claim_facts.bills = [Bill(page=4, kind="pharmacy", date=_fact("27-May-2026"), total=_fact(3000))]
+    assert _only(ctx, "bill_outside_cover_window").deductions == [LineDeduction(bill=0, line=-1, amount=3000)]
+
+
+def _initial(ctx, days):
+    from claimlens.models import InitialWaiting
+    ctx.policy_facts.waiting_periods = []
+    ctx.policy_facts.initial_waiting = InitialWaiting(clause="3.1", page=2, quote="first 30 days", days=days)
+
+
+def test_initial_waiting_inside_period_excludes_the_claim(ctx):
+    from claimlens.pipeline.settlement import settle
+    _initial(ctx, 10000)
+    f = _only(ctx, "initial_waiting_period")
+    assert f.severity == "coverage" and f.citations[0].quote == "first 30 days"
+    assert f.deductions[0].bill == -1 and f.amount_not_payable == f.deductions[0].amount > 0
+    s = settle(ctx.policy_facts, ctx.claim_facts, [f])
+    assert s.payable == 0 and s.whole_claim is not None
+
+
+def test_initial_waiting_outside_period_changes_nothing(ctx):
+    _initial(ctx, 1)
+    assert not [f for f in check_coverage(ctx) if f.code == "initial_waiting_period"]

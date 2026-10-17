@@ -56,6 +56,8 @@ make test                         # offline, fake AI
 
 All in `.env.example`. Each backend part switches between local and GCP: `STORAGE=local|gcs`,
 `DB=local|firestore`, `AI=vertex|fake`, `OCR=off|docai`, `AUTH_MODE=dev|firebase`.
+`BILL_STORY=on|off` (default `off`) turns on Gemini's judgement of the bill against the treatment; it is off because
+its live precision was below the bar.
 
 ## GCP (project `social-pulse-510513`)
 

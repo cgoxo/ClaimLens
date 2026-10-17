@@ -27,6 +27,11 @@ def append_file(case: Case, card_id: str, file: CaseFile) -> tuple[int, Case]:
     return len(card.files) - 1, case
 
 
+def _version_doc(number: int, finding: Finding, action: str, by: str, note: str) -> dict:
+    return {"version": number, "action": action, "by": by, "note": note, "at": now().isoformat(),
+            "finding": finding.model_dump(mode="json")}
+
+
 class Db(Protocol):
     def create_case(self, case: Case) -> None: ...
     def get_case(self, case_id: str) -> Case | None: ...
@@ -36,6 +41,9 @@ class Db(Protocol):
     def put_findings(self, case_id: str, findings: list[Finding]) -> None: ...
     def get_findings(self, case_id: str) -> list[Finding]: ...
     def update_finding(self, case_id: str, fid: str, **fields) -> Finding | None: ...
+    def add_finding_version(self, case_id: str, fid: str, finding: Finding, action: str, by: str,
+                            note: str) -> int: ...
+    def get_finding_versions(self, case_id: str, fid: str) -> list[dict]: ...
     def put_pages(self, case_id: str, pages: list[PageInfo]) -> None: ...
     def get_pages(self, case_id: str) -> list[PageInfo]: ...
     def get_invoice(self, key: str) -> dict | None: ...
@@ -132,6 +140,19 @@ class LocalDb:
                     self._write("findings", case_id, [x.model_dump(mode="json") for x in findings])
                     return findings[i]
             return None
+
+    def add_finding_version(self, case_id: str, fid: str, finding: Finding, action: str, by: str,
+                            note: str) -> int:
+        with self._lock:
+            versions = self._read("finding_versions", case_id) or {}
+            rows = versions.setdefault(fid, [])
+            number = max((v["version"] for v in rows), default=0) + 1
+            rows.append(_version_doc(number, finding, action, by, note))
+            self._write("finding_versions", case_id, versions)
+            return number
+
+    def get_finding_versions(self, case_id: str, fid: str) -> list[dict]:
+        return sorted((self._read("finding_versions", case_id) or {}).get(fid, []), key=lambda v: v["version"])
 
     # pages
     def put_pages(self, case_id: str, pages: list[PageInfo]) -> None:
@@ -245,6 +266,27 @@ class FirestoreDb:
         data = finding.model_dump(mode="json")
         ref.update({k: data[k] for k in fields})
         return finding
+
+    def add_finding_version(self, case_id: str, fid: str, finding: Finding, action: str, by: str,
+                            note: str) -> int:
+        from google.cloud import firestore
+
+        col = self._case(case_id).collection("finding_versions")
+        query = col.where("fid", "==", fid)
+
+        @firestore.transactional
+        def add(transaction) -> int:
+            numbers = [d.to_dict()["version"] for d in query.stream(transaction=transaction)]
+            number = max(numbers, default=0) + 1
+            transaction.set(col.document(f"{fid}-{number}"),
+                            {**_version_doc(number, finding, action, by, note), "fid": fid})
+            return number
+
+        return add(self.client.transaction())
+
+    def get_finding_versions(self, case_id: str, fid: str) -> list[dict]:
+        docs = (d.to_dict() for d in self._case(case_id).collection("finding_versions").where("fid", "==", fid).stream())
+        return sorted(({k: v for k, v in d.items() if k != "fid"} for d in docs), key=lambda v: v["version"])
 
     def put_pages(self, case_id: str, pages: list[PageInfo]) -> None:
         # page text can be long; Firestore documents max out at 1 MB

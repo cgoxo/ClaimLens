@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     ocr: Literal["off", "docai"] = "off"
     auth_mode: Literal["dev", "firebase"] = "dev"
     jobs: Literal["inline", "thread", "cloudtasks"] = "thread"
+    bill_story: Literal["on", "off"] = "off"
 
     data_dir: Path = Path("./data")
     fake_ai_dir: Path = BACKEND_DIR / "tests" / "fixtures" / "ai" / "sample"

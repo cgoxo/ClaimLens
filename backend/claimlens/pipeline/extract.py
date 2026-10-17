@@ -4,7 +4,7 @@ import pymupdf
 from pydantic import BaseModel
 from rapidfuzz import fuzz
 
-from claimlens.models import Fact, WaitingPeriod
+from claimlens.models import Fact, Rule
 from claimlens.pipeline.context import Ctx
 from claimlens.models import Card
 from claimlens.pipeline.read import ReadResult, open_document, reading_lines, visible_text
@@ -70,21 +70,27 @@ def ground(ctx: Ctx, doc: str, fact: Fact | None) -> Fact | None:
     return fact.model_copy(update={"bbox": bbox}) if found else None
 
 
-def _ground_model(ctx: Ctx, doc: str, model: BaseModel) -> BaseModel | None:
-    """Ground every Fact inside a model. A required fact that fails drops its parent."""
-    if isinstance(model, WaitingPeriod):
-        return model if locate(ctx, doc, model.page, model.quote)[0] else None
+def _ground_model(ctx: Ctx, doc: str, model: BaseModel, dropped: list[dict] | None = None) -> BaseModel | None:
+    """Ground every Fact inside a model. A required fact that fails drops its parent.
+    A Rule is kept only if its quote is on its page; a dropped rule is listed in `dropped`."""
+    if isinstance(model, Rule):
+        if locate(ctx, doc, model.page, model.quote)[0]:
+            return model
+        if dropped is not None:
+            dropped.append({"rule": type(model).__name__, "clause": model.clause,
+                            "page": model.page, "quote": model.quote})
+        return None
     updates = {}
     for name, field in type(model).model_fields.items():
         value = getattr(model, name)
         if isinstance(value, Fact):
             new = ground(ctx, doc, value)
         elif isinstance(value, BaseModel):
-            new = _ground_model(ctx, doc, value)
+            new = _ground_model(ctx, doc, value, dropped)
         elif isinstance(value, list):
             new = [g for item in value
                    if (g := ground(ctx, doc, item) if isinstance(item, Fact)
-                       else _ground_model(ctx, doc, item) if isinstance(item, BaseModel) else item) is not None]
+                       else _ground_model(ctx, doc, item, dropped) if isinstance(item, BaseModel) else item) is not None]
         else:
             continue
         if new is None and field.is_required():
@@ -98,4 +104,7 @@ def extract(ctx: Ctx) -> None:
     ctx.claim_facts = _ground_model(ctx, "claim", ai.extract_facts(
         labelled_text(ctx.read, "claim", ctx.cards, ctx.skip_pages)))
     ctx.policy_facts = _ground_model(ctx, "policy", ai.extract_policy(
-        labelled_text(ctx.read, "policy", ctx.cards, ctx.skip_pages)))
+        labelled_text(ctx.read, "policy", ctx.cards, ctx.skip_pages)), ctx.rules_not_verified)
+    if ctx.policy_facts is not None and ctx.policy_facts.room_rent_limit_per_day is not None:
+        # the older room limit supplies the limit, so a room limit that failed proof is not a gap to report
+        ctx.rules_not_verified[:] = [r for r in ctx.rules_not_verified if r.get("rule") != "RoomLimit"]

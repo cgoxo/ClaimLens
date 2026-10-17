@@ -33,7 +33,7 @@ def parse_money(v) -> float | None:
         return None
     if isinstance(v, (int, float)):
         return float(v)
-    cleaned = re.sub(r"(?i)rs\.?|₹|inr|,|\s", "", str(v))
+    cleaned = re.sub(r"(?i)rs\.?|₹|inr|,|\s", "", str(v)).rstrip("/-")
     try:
         return float(cleaned)
     except ValueError:

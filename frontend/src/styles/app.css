@@ -254,6 +254,47 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border
 .page-link:hover { text-decoration: underline; }
 .page-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
+/* ---------- case: recommendation, settlement sheet, policy rules ---------- */
+.case-verdict { display: grid; justify-items: end; gap: var(--space-3); max-width: 280px; text-align: right; }
+.recommendation { display: grid; gap: var(--space-2); justify-items: end; }
+.rec-badge { display: inline-block; padding: 2px 10px; border: 2px solid var(--c, var(--slate)); color: var(--c, var(--slate)); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 13px; }
+.rec-investigate { --c: var(--stamp-red); }
+.rec-query { --c: var(--amber); }
+.rec-not_payable { --c: var(--ink); }
+.rec-approve_part { --c: var(--slate); }
+.rec-approve { --c: var(--olive); }
+.rec-reasons { margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-soft); }
+.rec-change { margin: 0; font-size: 12px; color: var(--ink-soft); }
+
+.panel { margin: var(--space-4) 0; border-bottom: 1px solid var(--rule); padding-bottom: var(--space-3); }
+.panel > summary { cursor: pointer; font-family: var(--font-display); font-size: 18px; font-weight: 500; padding: var(--space-2) 0; }
+.panel > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.settle-table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--sheet); }
+.settle-table th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink-soft); padding: 6px 8px; border-bottom: 1px solid var(--rule); }
+.settle-table td { padding: 6px 8px; vertical-align: top; }
+.settle-table .num { text-align: right; white-space: nowrap; }
+.settle-line td { border-top: 1px solid var(--rule); }
+.settle-deduction td { color: var(--ink-soft); font-size: 13px; padding-top: 2px; padding-bottom: 2px; }
+.settle-total td, .settle-total th { border-top: 1px solid var(--ink-soft); font-weight: 500; font-size: 14px; color: var(--ink); }
+.settle-final td, .settle-final th { border-top: 2px solid var(--ink); font-size: 16px; }
+.clause-chip { background: var(--paper); cursor: pointer; font-family: var(--font-mono); }
+.clause-chip:hover { border-color: var(--ink); color: var(--ink); }
+.clause-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.settle-notes { margin: var(--space-3) 0 0; padding-left: var(--space-5); font-size: 13px; color: var(--ink-soft); }
+
+.rule-list { margin: 0; display: grid; gap: 0; }
+.rule-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-3); padding: 6px 0; border-top: 1px solid var(--rule); font-size: 14px; }
+.rule-row dt { color: var(--ink-soft); }
+.rule-row dd { margin: 0; }
+.rule-unverified-title { margin: var(--space-4) 0 var(--space-1); font-size: 14px; }
+.rule-unverified { padding-left: var(--space-5); font-size: 13px; }
+@media (max-width: 720px) {
+  .case-verdict { justify-items: start; text-align: left; max-width: none; }
+  .recommendation { justify-items: start; }
+  .settle-table { font-size: 13px; }
+}
+
 /* ---------- toasts ---------- */
 .toasts { position: fixed; right: var(--space-4); bottom: var(--space-4); display: grid; gap: var(--space-2); z-index: 20; max-width: min(360px, calc(100vw - 32px)); }
 .toast { text-align: left; background: var(--ink); color: var(--sheet); border: 0; padding: var(--space-3) var(--space-4); box-shadow: var(--shadow-paper); font: inherit; font-size: 14px; cursor: pointer; }

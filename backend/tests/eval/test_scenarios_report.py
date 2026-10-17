@@ -1,4 +1,4 @@
-from eval.scenarios.report import code_table, band_matrix, render, worst
+from eval.scenarios.report import action_matrix, band_matrix, code_table, render, rule_table, silent_rule_table, worst
 
 
 def _row(expected, found, status=("READY", "READY"), band=("low", "low"), payable=(100.0, 100.0), fmt="one_pdf"):
@@ -37,3 +37,30 @@ def test_render_has_the_sections():
     text = render([_row({"sum_mismatch": 1}, {"sum_mismatch": 1})], target="live", date="2026-10-16")
     for section in ("Case pass rate", "Per finding", "Risk band", "Payable", "Rejections", "By format", "Worst"):
         assert section in text
+
+
+def test_recommendation_counts_and_confusion_table():
+    right = {**_row({}, {}), "recommendation_expected": "approve_part", "recommendation_found": "approve_part"}
+    wrong = {**_row({}, {}), "recommendation_expected": "query", "recommendation_found": "approve"}
+    rejected = _row({}, {}, status=("REJECTED", "REJECTED"))  # no recommendation expected: not counted
+    m = action_matrix([right, wrong, rejected])
+    assert m["approve_part"]["approve_part"] == 1 and m["query"]["approve"] == 1
+    text = render([right, wrong, rejected], target="live", date="2026-10-16")
+    assert "Recommendation: 1/2 correct" in text and "| **query** |" in text
+
+
+def test_rule_table_counts_found_and_proved():
+    a = _row({"icu_limit": 1, "room_rent_limit": 1}, {"icu_limit": 1})
+    b = _row({"icu_limit": 1}, {"icu_limit": 1})
+    t = rule_table([a, b, _row({}, {})])
+    assert t["icu_limit"] == {"expected": 2, "proved": 2} and t["room_rent_limit"] == {"expected": 1, "proved": 0}
+    assert "Found and proved" in render([a], target="live", date="2026-10-16")
+
+
+def test_silent_rules_are_reported_through_payable_accuracy():
+    ok = {**_row({}, {}, payable=(100.0, 100.0)), "rules": ["co_pay", "deductible"]}
+    bad = {**_row({}, {}, payable=(100.0, 90.0)), "rules": ["co_pay"]}
+    t = silent_rule_table([ok, bad, _row({}, {})])
+    assert t["co_pay"] == {"cases": 2, "payable_ok": 1} and t["deductible"] == {"cases": 1, "payable_ok": 1}
+    assert t["sub_limit"] == {"cases": 0, "payable_ok": 0}
+    assert "no finding code" in render([ok], target="live", date="2026-10-16")

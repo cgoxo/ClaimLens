@@ -6,6 +6,8 @@ from datetime import date as today
 from pathlib import Path
 
 BANDS = ["low", "review", "high"]
+ACTIONS = ["investigate", "query", "not_payable", "approve_part", "approve"]
+RULES = ["waiting_period", "room_rent_limit", "icu_limit", "non_payable_items", "bill_outside_cover_window"]
 
 
 def code_table(rows: list[dict]) -> dict[str, dict]:
@@ -30,6 +32,38 @@ def band_matrix(rows: list[dict]) -> dict[str, Counter]:
     for r in rows:
         m[r["band_expected"] or "none"][r["band_found"] or "none"] += 1
     return m
+
+
+def action_matrix(rows: list[dict]) -> dict[str, Counter]:
+    """Expected recommendation (rows) against the one found (columns), for the cases that have one."""
+    m = {a: Counter() for a in ACTIONS}
+    for r in rows:
+        if r.get("recommendation_expected") is not None:
+            m[r["recommendation_expected"]][r.get("recommendation_found") or "none"] += 1
+    return m
+
+
+def rule_table(rows: list[dict]) -> dict[str, dict]:
+    """Per policy rule: cases where truth expects it, and how many of those ClaimLens found and proved
+    (a finding is stored only after its quote is proved on the policy page)."""
+    out = {}
+    for code in RULES:
+        wanted = [r for r in rows if r["expected_codes"].get(code)]
+        out[code] = {"expected": len(wanted), "proved": sum(1 for r in wanted if r["found_codes"].get(code))}
+    return out
+
+
+SILENT_RULES = ["proportionate", "deductible", "co_pay", "sub_limit", "sum_insured_cap"]
+
+
+def silent_rule_table(rows: list[dict]) -> dict[str, dict]:
+    """Payable accuracy (within Rs 1) for the cases where each finding-less rule is present."""
+    out = {}
+    for name in SILENT_RULES:
+        cases = [r for r in rows if name in r.get("rules", []) and r["payable_expected"] is not None]
+        ok = sum(1 for r in cases if r["payable_found"] is not None and abs(r["payable_found"] - r["payable_expected"]) <= 1)
+        out[name] = {"cases": len(cases), "payable_ok": ok}
+    return out
 
 
 def passed(r: dict) -> bool:
@@ -72,7 +106,23 @@ def render(rows: list[dict], target: str, date: str | None = None) -> str:
               "| --- " * 5 + "|"]
     for b in BANDS + ["none"]:
         lines.append(f"| **{b}** | " + " | ".join(str(m[b][c]) for c in BANDS + ["none"]) + " |")
-    lines += ["", f"## Payable: {pay_ok}/{len(pay)} within ₹1", "",
+    lines += ["", f"## Payable: {pay_ok}/{len(pay)} within ₹1", ""]
+    advised = [r for r in rows if r.get("recommendation_expected") is not None]
+    advice_ok = sum(1 for r in advised if r["recommendation_expected"] == r.get("recommendation_found"))
+    am = action_matrix(rows)
+    lines += [f"## Recommendation: {advice_ok}/{len(advised)} correct", "",
+              "| (rows: expected, columns: found) | " + " | ".join(ACTIONS + ["none"]) + " |", "| --- " * 7 + "|"]
+    for a in ACTIONS:
+        lines.append(f"| **{a}** | " + " | ".join(str(am[a][c]) for c in ACTIONS + ["none"]) + " |")
+    lines += ["", "## Policy rules found and proved", "", "| Rule | Cases expected | Found and proved |", "| --- | --- | --- |"]
+    for code, t in rule_table(rows).items():
+        lines.append(f"| {code} | {t['expected']} | {t['proved']} |")
+    lines += ["", "Proportionate deduction, deductible, co-pay, sub-limit and the sum-insured cap have no finding "
+              "code. They are checked through payable accuracy:", "",
+              "| Rule present | Cases | Payable within Rs 1 |", "| --- | --- | --- |"]
+    for name, t in silent_rule_table(rows).items():
+        lines.append(f"| {name} | {t['cases']} | {t['payable_ok']} |")
+    lines += ["",
               f"## Rejections: {rej_ok}/{len(rej)} right", "", "## By format", "",
               "| Format | Cases | Passed |", "| --- | --- | --- |"]
     for fmt in sorted({r["fmt"] for r in rows}):

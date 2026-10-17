@@ -6,7 +6,7 @@ interface Props {
   findings: Finding[];
   selectedId: string | null;
   onSelect(f: Finding): void;
-  onReview(f: Finding, action: "accept" | "dismiss", note: string): Promise<Finding>;
+  onReview(f: Finding, action: "accept" | "dismiss" | "restore", note: string): Promise<Finding>;
 }
 
 export default function FindingList({ findings, selectedId, onSelect, onReview }: Props) {

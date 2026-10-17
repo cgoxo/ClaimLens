@@ -7,6 +7,9 @@ import CaseContext from "../components/CaseContext";
 import FindingList from "../components/FindingList";
 import PageViewer from "../components/PageViewer";
 import Progress from "../components/Progress";
+import Recommendation from "../components/Recommendation";
+import RulebookPanel from "../components/RulebookPanel";
+import SettlementPanel from "../components/SettlementPanel";
 import RiskStamp from "../components/RiskStamp";
 import { useCasePolling } from "../hooks/useCasePolling";
 import { useCaseWatcher } from "../hooks/useCaseWatcher";
@@ -17,7 +20,7 @@ import { money } from "../lib/format";
 export default function CasePage() {
   const { id = "" } = useParams();
   const { client } = useAuth();
-  const { data, error, connectionLost } = useCasePolling(id, client);
+  const { data, error, connectionLost, setData } = useCasePolling(id, client);
   const [chosenId, setSelectedId] = useState<string | null>(null);
   const [selectionKey, setSelectionKey] = useState(0);
   // a context value opened in the viewer; picking a finding clears it
@@ -60,7 +63,17 @@ export default function CasePage() {
     return () => document.removeEventListener("keydown", onKey);
   }, [move]);
 
-  const review = (f: Finding, action: "accept" | "dismiss", note: string) => client.review(id, f.id, action, note);
+  // the response carries the recalculated outcome: apply it, so the header and panels follow the review
+  const review = async (f: Finding, action: "accept" | "dismiss" | "restore", note: string) => {
+    const { current, ...saved } = await client.review(id, f.id, action, note);
+    if (current) {
+      setData((d) => d && {
+        ...d, current, score: current.score, risk: current.risk, payable: current.payable,
+        findings: d.findings.map((x) => (x.id === saved.id ? saved : x)),
+      });
+    }
+    return saved;
+  };
 
   const viewer = (selected: Finding | null) => data && (
     <PageViewer caseId={data.id} pages={data.pages} cards={data.cards} client={client}
@@ -114,6 +127,7 @@ export default function CasePage() {
   } else {
     const ready = data.status === "READY";
     const selected = ready ? findings.find((f) => f.id === selectedId) ?? null : null;
+    const settlement = (data.current ?? data.analysis)?.settlement ?? null;
     const mismatch = findings.some((f) => f.code === "policy_number_mismatch");
     const context = data.context && <CaseContext context={data.context} mismatch={mismatch} onOpen={openFact} />;
     body = ready ? (
@@ -128,9 +142,31 @@ export default function CasePage() {
                 <div><dt>Findings</dt><dd className="mono">{findings.length}</dd></div>
               </dl>
             </div>
-            {data.risk && <RiskStamp risk={data.risk} score={data.score} />}
+            <div className="case-verdict">
+              {data.risk && <RiskStamp risk={data.risk} score={data.score} />}
+              <Recommendation analysis={data.analysis} current={data.current} />
+            </div>
           </header>
-          {data.summary && <p className="summary">{data.summary}</p>}
+          {data.summary && (
+            <p className="summary">
+              {data.analysis && data.current && JSON.stringify(data.analysis) !== JSON.stringify(data.current) && (
+                <span className="muted small">At analysis: </span>
+              )}
+              {data.summary}
+            </p>
+          )}
+          {settlement && (
+            <details className="panel" open>
+              <summary>Settlement</summary>
+              <SettlementPanel settlement={settlement} onOpenClause={openFact} />
+            </details>
+          )}
+          {data.context?.policy && (
+            <details className="panel">
+              <summary>Policy rules</summary>
+              <RulebookPanel policy={data.context.policy} notVerified={data.rules_not_verified ?? []} onOpenClause={openFact} />
+            </details>
+          )}
           {context}
           <p className="hint muted">Select a finding to see it on the page. <kbd>j</kbd> / <kbd>k</kbd> to move.</p>
           <FindingList findings={findings} selectedId={selectedId} onSelect={(f) => { setPinned(null); setSelectedId(f.id); setSelectionKey((k) => k + 1); }} onReview={review} />

@@ -63,16 +63,30 @@ def _pharmacy_after(r: Recipe) -> Recipe:
     return pharmacy_after(r)
 
 
+def _extra_room_days(r: Recipe) -> Recipe:
+    # two more room days than the patient stayed
+    return r.copy(extra_room_days=r.extra_room_days + 2, claimed=r.claimed + 2 * r.room_rate)
+
+
+def _unrelated_charge(r: Recipe) -> Recipe:
+    item = ("Spa and massage package", 4500)
+    return r.copy(unrelated_item=item, claimed=r.claimed + item[1])
+
+
+def _duplicate_line(r: Recipe) -> Recipe:
+    return r.copy(duplicate_line=True, claimed=r.claimed + r.other_items[0][1])
+
+
 TAMPER = {"retype_total", "retype_line", "editor_resave", "late_edit"}
 REJECT = {"cv_in_claim", "bill_in_policy", "policy_in_claim"}
 CLAIMED = {"retype_total", "claimed_mismatch", "missing_page"}
 
 FORGERIES: dict[str, Forgery] = {
     "retype_total": Forgery(_retype_total),
-    "retype_line": Forgery(_retype_line),
+    "retype_line": Forgery(_retype_line, {"duplicate_line"}),
     "editor_resave": Forgery(),
     "late_edit": Forgery(),
-    "incremental_save": Forgery(),
+    "incremental_save": Forgery(conflicts={"missing_page"}),
     "pharmacy_after_discharge": Forgery(_pharmacy_after, {"admit_after_discharge"}),
     "admit_after_discharge": Forgery(_admit_after_discharge, {"pharmacy_after_discharge"}),
     "name_typo": Forgery(lambda r: r.copy(names={"Discharge Summary": _typo(r.patient)}), {"different_name"}),
@@ -84,7 +98,11 @@ FORGERIES: dict[str, Forgery] = {
     "waiting_period": Forgery(_waiting),
     "room_over_limit": Forgery(_room_over, needs=lambda r: r.room_limit is not None),
     "duplicate_page": Forgery(conflicts={"missing_page"}),
-    "missing_page": Forgery(_missing, {"duplicate_page"}, needs=lambda r: len(r.pharmacies) > 0),
+    # dropping the last page of a one-file claim saves it afresh: the extra save mark is gone
+    "missing_page": Forgery(_missing, {"duplicate_page", "incremental_save"}, needs=lambda r: len(r.pharmacies) > 0),
+    "extra_room_days": Forgery(_extra_room_days),
+    "unrelated_charge": Forgery(_unrelated_charge, needs=lambda r: r.unrelated_item is None),
+    "duplicate_line": Forgery(_duplicate_line, {"retype_line"}, needs=lambda r: not r.duplicate_line),
     "cv_in_claim": Forgery(rejection=True),
     "bill_in_policy": Forgery(rejection=True),
     "policy_in_claim": Forgery(rejection=True),

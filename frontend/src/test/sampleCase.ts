@@ -50,7 +50,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 0.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     },
     {
@@ -75,7 +75,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 0.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     },
     {
@@ -100,7 +100,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 0.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     },
     {
@@ -125,7 +125,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 0.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     },
     {
@@ -150,7 +150,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 0.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     },
     {
@@ -175,7 +175,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 0.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     },
     {
@@ -200,7 +200,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 0.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     },
     {
@@ -220,7 +220,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 0.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     },
     {
@@ -240,7 +240,7 @@ export const sampleCase: Case = {
         }
       ],
       "amount_not_payable": 4500.0,
-      "verified": true,
+      "items": [],      "verified": true,
       "review": null
     }
   ],

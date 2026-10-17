@@ -16,6 +16,10 @@ CONDITIONS = [("Cataract", "Phacoemulsification with IOL implant", True),
               ("Dengue fever", "Supportive inpatient care", False),
               ("Forearm fracture", "Open reduction internal fixation", False)]
 WAITING_LIST = ["Cataract", "Hernia", "Knee replacement", "Kidney stones"]
+# bill items on the standard non-payable list (the policy may or may not carry the clause)
+STANDARD_CONSUMABLES = ["Gloves", "Face mask", "Admission kit", "Registration charges", "Toiletries",
+                        "Cotton and dressing material", "Attendant charges", "Diapers"]
+LISTED_ITEMS = ["admission kit", "attendant charges", "diapers"]  # what an explicit non-payable clause names
 
 
 @dataclass
@@ -50,6 +54,25 @@ class Recipe:
     claimed: int = 0
     claim_day: date = date(2026, 3, 22)
     sum_insured: int = 300000
+    # policy rules (all off by default)
+    co_pay: float = 0  # percent
+    co_pay_age: int | None = None  # the co-pay applies only above this age
+    deductible: int = 0
+    sub_limit: int | None = None  # rupees, for the claim's own condition
+    icu_limit_pct: float | None = None  # percent of the sum insured per day
+    proportionate: bool = False
+    non_payable_standard: bool = False  # the policy carries the standard non-payable clause
+    non_payable_items: list = field(default_factory=list)  # or names its non-payable items (lower case)
+    pre_days: int | None = None  # the cover window (both or neither)
+    post_days: int | None = None
+    # on the bill
+    icu_days: int = 0
+    icu_rate: int = 0
+    consumables: list = field(default_factory=list)  # (description, amount) of standard non-payable items
+    unrelated_item: tuple | None = None  # (description, amount) that does not fit the treatment
+    extra_room_days: int = 0  # room days charged beyond the stay
+    duplicate_line: bool = False  # the first other item is charged twice
+    patient_age: int | None = None
     # what the forgeries changed (set by forgeries.apply)
     shown_total: int | None = None  # a retyped hospital total
     shown_item: tuple | None = None  # (index into items, retyped amount)
@@ -58,12 +81,18 @@ class Recipe:
 
     @property
     def days(self) -> int:
-        return self._stay
+        """Room days charged: the stay less ICU days, plus any extra."""
+        return self._stay - self.icu_days + self.extra_room_days
 
     @property
     def items(self) -> list:
-        return [(f"Room charges ({self._stay} days x Rs {self.room_rate:,})", self._stay * self.room_rate),
-                *self.other_items]
+        others = list(self.other_items)
+        if self.duplicate_line and others:
+            others.insert(1, others[0])
+        icu = [(f"ICU charges ({self.icu_days} days x Rs {self.icu_rate:,})", self.icu_days * self.icu_rate)] \
+            if self.icu_days else []
+        return [(f"Room charges ({self.days} days x Rs {self.room_rate:,})", self.days * self.room_rate),
+                *icu, *others, *self.consumables, *([self.unrelated_item] if self.unrelated_item else [])]
 
     @property
     def hospital_total(self) -> int:
@@ -81,7 +110,8 @@ def day(d: date) -> str:
     return d.strftime("%d-%b-%Y")
 
 
-def make_recipe(seed: int, run: str) -> Recipe:
+def make_recipe(seed: int, run: str, rules: bool = True) -> Recipe:
+    """`rules` False: the plain claim of a seed, with no policy rules or extra bill lines."""
     rng = np.random.default_rng(seed)
     patient = f"{rng.choice(FIRST)} {rng.choice(LAST)}"
     condition, procedure, _ = CONDITIONS[int(rng.integers(0, len(CONDITIONS)))]
@@ -104,5 +134,69 @@ def make_recipe(seed: int, run: str) -> Recipe:
                bill_day=discharge, pharmacies=pharmacies, claim_day=discharge + timedelta(days=int(rng.integers(5, 15))),
                sum_insured=sum_insured)
     r.policy_no_on_claim = r.policy_no
+    if rules:
+        _add_rules(r, np.random.default_rng([seed, 17]))  # its own stream: the fields above never change
     r.claimed = r.hospital_total + sum(p.amount for p in pharmacies)
     return r
+
+
+def _add_rules(r: Recipe, x: np.random.Generator) -> None:
+    """Mix in policy rules and bill lines. Every draw is made whether or not it is used, so one choice never
+    shifts the next."""
+    stay, si = r._stay, r.sum_insured
+    icu, pct, over, under = x.random() < 0.3, float(x.choice([2, 3])), x.random() < 0.5, x.uniform(0.6, 0.95)
+    icu_days, above = int(x.integers(1, stay)), x.uniform(1.1, 1.6)
+    if icu:
+        limit = si * pct / 100
+        r.icu_limit_pct, r.icu_days = pct, icu_days
+        r.icu_rate = int(round(limit * (above if over else under) / 100) * 100)
+    deductible, d_on = int(x.choice([10000, 25000])), x.random() < 0.3
+    cp_on, cp_pct, by_age, roll = x.random() < 0.3, float(x.choice([10, 20])), x.random() < 0.4, x.random()
+    over_age, under_age, any_age, age_known = (int(x.integers(61, 80)), int(x.integers(25, 61)),
+                                               int(x.integers(20, 75)), x.random() < 0.7)
+    sub_on, sub_factor = x.random() < 0.25, x.uniform(0.4, 1.4)
+    prop, np_on, cons_on = x.random() < 0.4, x.random() < 0.4, x.random() < 0.5
+    k = int(x.integers(1, 4))
+    cons = [(str(c), int(x.integers(1, 26)) * 100) for c in x.choice(STANDARD_CONSUMABLES, size=k, replace=False)]
+    win_on, pre, post = x.random() < 0.3, int(x.choice([30, 60])), int(x.choice([30, 60, 90]))
+    explicit, other, other_amount = x.random() < 0.5, str(x.choice(["Gloves", "Face mask", "Toiletries"])), \
+        int(x.integers(1, 26)) * 100
+    listed = [str(d) for d in x.choice(LISTED_ITEMS, size=int(x.integers(2, 4)), replace=False)]
+    listed_bill = [(d, int(x.integers(1, 26)) * 100) for d in listed[: int(x.integers(1, len(listed) + 1))]]
+    cap_on, cap_factor = x.random() < 0.12, x.uniform(0.2, 0.45)
+    out_on, early, gap, amount = x.random() < 0.6, x.random() < 0.7, int(x.integers(3, 20)), int(x.integers(3, 20)) * 100
+
+    if d_on:
+        r.deductible = deductible
+    if cp_on:
+        r.co_pay = cp_pct
+        if by_age:
+            r.co_pay_age = 60
+            r.patient_age = over_age if roll < 0.45 else under_age if roll < 0.85 else None
+        elif age_known:
+            r.patient_age = any_age
+    elif age_known:
+        r.patient_age = any_age
+    r.proportionate = prop
+    if np_on and explicit:
+        r.non_payable_items = listed
+        # the bill has some listed items and one the clause does not name
+        r.consumables = [(d.capitalize(), a) for d, a in listed_bill] + [(other, other_amount)]
+    elif np_on:
+        r.non_payable_standard = True
+    if cons_on and not r.consumables:
+        r.consumables = cons
+    if win_on:
+        r.pre_days, r.post_days = pre, post
+        if out_on:
+            if early:
+                when = r.admission - timedelta(days=pre + gap)
+            else:
+                when = r.discharge + timedelta(days=post + gap)
+                r.claim_day = when + timedelta(days=2)
+            r.pharmacies = [*r.pharmacies, Pharmacy(f"PH-{r.run}-{r.seed}-w", when, amount, inpatient=False)]
+    if sub_on:
+        r.sub_limit = max(5000, int(round(r.hospital_total * sub_factor / 1000)) * 1000)
+    if cap_on and not (r.room_limit or r.icu_days or r.sub_limit):
+        # a sum insured below the bills: the cap bites after the deductible and co-pay
+        r.sum_insured = max(3000, int(round(r.hospital_total * cap_factor / 1000)) * 1000)

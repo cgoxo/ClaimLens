@@ -1,15 +1,18 @@
 from collections import Counter
+from datetime import date, timedelta
 
 import numpy as np
+import pymupdf
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from eval.scenarios.forgeries import FORGERIES, pick
-from eval.scenarios.recipe import make_recipe
-from eval.scenarios.render import render
-from eval.scenarios.truth import truth_of
+from eval.scenarios.recipe import Pharmacy, Recipe, make_recipe
+from eval.scenarios.render import W, clauses, policy_pdf, render
+from eval.scenarios.truth import expected_recommendation, expected_settlement, policy_facts, truth_of
 
 
 def _truth(names=(), fmt="one_pdf", ocr=True, seed=3):
-    recipe = make_recipe(seed, "t1")
+    recipe = make_recipe(seed, "t1", rules=False)  # the plain claim: what each forgery does shows alone
     for n in names:
         recipe = FORGERIES[n].apply(recipe)
     return recipe, truth_of(recipe, list(names), fmt, ocr=ocr)
@@ -76,3 +79,142 @@ def test_render_is_deterministic():
     a = render(recipe, ["retype_total"], "split_files")
     b = render(recipe, ["retype_total"], "split_files")
     assert [(c, n) for c, n, _ in a] == [(c, n) for c, n, _ in b]
+
+
+def _text(pdf: bytes) -> str:
+    return " ".join(" ".join(page.get_text().split()) for page in pymupdf.open(stream=pdf, filetype="pdf"))
+
+
+def _all_rules() -> Recipe:
+    return Recipe(run="t", seed=1, patient="Asha Iyer", condition="Appendicitis", room_limit=3000, icu_limit_pct=2,
+                  proportionate=True, deductible=25000, co_pay=20, co_pay_age=60, sub_limit=80000,
+                  non_payable_standard=True, pre_days=30, post_days=60)
+
+
+def test_policy_pdf_prints_every_rule():
+    r = _all_rules()
+    text = _text(policy_pdf(r))
+    sentences = [
+        "Room rent is payable up to 1% of the sum insured per day",
+        "ICU charges are payable up to 2% of the sum insured per day.",
+        "Proportionate deduction applies to doctor, nursing, surgery and test charges.",
+        "A deductible of Rs 25,000 applies to each claim, before any co-pay.",
+        "A co-pay of 20% applies if the patient is aged over 60.",
+        "Appendicitis treatment is payable up to Rs 80,000 per claim.",
+        "Standard non-payable items (gloves, masks, admission kit, etc.) are not payable.",
+        "Bills are covered from 30 days before admission to 60 days after discharge."]
+    for sentence in sentences:
+        assert sentence in text, sentence
+    assert [c.quote for c in clauses(r)] == sentences
+    assert all(stringWidth(c.quote, "Helvetica", 11) < W - 100 for c in clauses(r))  # each fits on one line
+    assert "Clause 5.5" in text and "Clause 2.2" in text
+
+
+def test_policy_facts_carry_every_rule_with_its_quote():
+    p = policy_facts(_all_rules())
+    assert p.room_limit.percent_of_si == 1 and p.icu_limit.percent_of_si == 2 and p.proportionate_deduction
+    assert p.deductible.amount == 25000 and p.co_pays[0].applies == "age_over" and p.co_pays[0].age == 60
+    assert p.sub_limits[0].applies_to == "Appendicitis" and p.non_payable.standard_list
+    assert (p.window.pre_days, p.window.post_days) == (30, 60)
+    assert all(rule.quote and rule.clause for rule in
+               [p.room_limit, p.icu_limit, p.proportionate_deduction, p.deductible, *p.co_pays, *p.sub_limits,
+                p.non_payable, p.window])
+
+
+def test_rules_are_off_unless_the_recipe_has_them():
+    text = _text(policy_pdf(Recipe(run="t", seed=1, patient="Asha Iyer")))
+    for word in ("deductible", "co-pay", "ICU", "Proportionate", "window", "Section 5"):
+        assert word not in text
+
+
+def _plain(**changes) -> Recipe:  # room 3 x 3,000 plus one 91,000 line: bills of 100,000
+    return Recipe(run="t", seed=1, patient="Asha Iyer", other_items=[("Surgeon and OT charges", 91000)],
+                  claimed=100000, **changes)
+
+
+def test_truth_settlement_copay_and_deductible():
+    assert expected_settlement(_plain()) == 100000
+    assert expected_settlement(_plain(deductible=25000, co_pay=10)) == 67500  # (100,000 - 25,000) x 90%
+
+
+def test_truth_settlement_follows_the_order_of_the_rules():
+    # waiting period: nothing is payable whatever else applies
+    waiting = _plain(condition="Hernia", sub_limit=60000, deductible=10000, co_pay=20, start=date(2025, 6, 1))
+    assert expected_settlement(waiting) == 0
+    # sub-limit first, then deductible, then co-pay: (60,000 - 10,000) x 80%
+    assert expected_settlement(_plain(sub_limit=60000, deductible=10000, co_pay=20)) == 40000
+    # the co-pay above an age: applies over it, not at it, and not when the age is unknown
+    assert expected_settlement(_plain(co_pay=20, co_pay_age=60, patient_age=61)) == 80000
+    assert expected_settlement(_plain(co_pay=20, co_pay_age=60, patient_age=60)) == 100000
+    assert expected_settlement(_plain(co_pay=20, co_pay_age=60)) == 100000
+
+
+def test_truth_settlement_room_icu_proportionate_non_payable_and_window():
+    # room 3 days at Rs 4,500 against a Rs 3,000 limit: Rs 4,500 excess, a third off the surgeon's line
+    r = _plain(room_limit=3000, room_rate=4500, proportionate=True)
+    r = r.copy(claimed=r.hospital_total)
+    assert expected_settlement(r) == r.hospital_total - 4500 - round(91000 / 3)
+    # ICU 2 days at Rs 9,000 against 2% of Rs 3,00,000 (Rs 6,000): Rs 6,000 excess; the gloves and mask are not paid
+    r = _plain(icu_limit_pct=2, icu_days=2, icu_rate=9000, consumables=[("Gloves", 700), ("Face mask", 300)],
+               non_payable_standard=True)
+    r = r.copy(claimed=r.hospital_total)
+    assert expected_settlement(r) == r.hospital_total - 6000 - 1000
+    # the same gloves on a policy without the clause are paid
+    assert expected_settlement(r.copy(non_payable_standard=False, icu_limit_pct=None)) == r.hospital_total
+    # a pharmacy bill dated 40 days before admission against a 30-day window
+    early = Pharmacy("PH-1", date(2026, 3, 10) - timedelta(days=40), 800, inpatient=False)
+    w = _plain(pre_days=30, post_days=60, pharmacies=[early])
+    w = w.copy(claimed=w.hospital_total + 800)
+    assert expected_settlement(w) == w.hospital_total
+
+
+def test_recommendation_precedence():
+    assert expected_recommendation([("font_outlier", "critical")], "low", 100, 0) == "investigate"
+    assert expected_recommendation([], "high", 100, 100) == "investigate"
+    assert expected_recommendation([], "review", 100, 0) == "query"
+    assert expected_recommendation([], "low", 100, 0, whole_claim=True) == "not_payable"
+    assert expected_recommendation([], "low", 100, 0) == "not_payable"
+    assert expected_recommendation([], "low", 100, 98) == "approve_part"
+    assert expected_recommendation([], "low", 100, 100) == "approve"
+    assert expected_recommendation([], "low", 100, 99.5) == "approve"
+    assert expected_recommendation([], "low", 100, 100, amount_unclear=True) == "query"
+    assert expected_recommendation([("unreadable_file", "low")], "low", None, None) == "query"
+
+
+def test_new_forgeries_expect_their_findings():
+    _, extra = _truth(["extra_room_days"])
+    assert extra.codes == Counter({"room_days_exceed_stay": 1})
+    assert extra.severities["room_days_exceed_stay"] == ["high"]
+    _, unrelated = _truth(["unrelated_charge"])
+    assert unrelated.codes == Counter({"charge_unrelated_to_treatment": 1})
+    assert [v.verdict for v in unrelated.story_verdicts] == ["unrelated"] and unrelated.band == "low"
+    _, dup = _truth(["duplicate_line"])
+    assert dup.codes == Counter({"duplicate_charge": 1})
+
+
+def test_explicit_non_payable_list_deducts_only_the_named_items():
+    r = _plain(non_payable_items=["admission kit", "diapers"],
+               consumables=[("Admission kit", 700), ("Diapers", 300), ("Gloves", 500)])
+    r = r.copy(claimed=r.hospital_total)
+    assert expected_settlement(r) == r.hospital_total - 1000  # the gloves are not on the list
+    p = policy_facts(r)
+    assert p.non_payable.items == ["admission kit", "diapers"] and not p.non_payable.standard_list
+    assert "These items are not payable: admission kit, diapers." in _text(policy_pdf(r))
+    assert expected_settlement(r.copy(non_payable_items=[])) == r.hospital_total
+
+
+def test_truth_settlement_caps_at_the_sum_insured_after_the_other_rules():
+    # 100,000 less a 10,000 deductible and a 10% co-pay is 81,000; a Rs 50,000 sum insured caps it
+    assert expected_settlement(_plain(deductible=10000, co_pay=10, sum_insured=50000)) == 50000
+    assert expected_settlement(_plain(deductible=10000, co_pay=10, sum_insured=90000)) == 81000
+
+
+def test_make_recipe_mixes_both_non_payable_variants_and_a_low_sum_insured():
+    recipes = [make_recipe(s, "t") for s in range(300)]
+    assert any(r.non_payable_standard for r in recipes)
+    explicit = [r for r in recipes if r.non_payable_items]
+    assert explicit and all(r.non_payable_standard is False for r in explicit)
+    for r in explicit:  # one listed item on the bill and one that is not listed
+        descs = [d.lower() for d, _ in r.consumables]
+        assert any(d in r.non_payable_items for d in descs) and any(d not in r.non_payable_items for d in descs)
+    assert any(r.sum_insured < r.claimed for r in recipes)

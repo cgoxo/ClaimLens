@@ -129,3 +129,93 @@ def test_no_majority_name_means_no_name_finding(ctx):
     names = [Fact(value="A Kumar", page=1, quote="A Kumar"), Fact(value="B Rao", page=2, quote="B Rao")]
     ctx.claim_facts = ctx.claim_facts.model_copy(update={"claimant_name": None, "names": names})
     assert _codes(check_story(ctx), "name_mismatch") == []
+
+
+def _fact(value, quote=None, page=3):
+    from claimlens.models import Fact
+
+    return Fact(value=value, page=page, quote=quote or str(value))
+
+
+def _set_bills(ctx, bills):
+    ctx.claim_facts = ctx.claim_facts.model_copy(update={"bills": bills})
+
+
+def _room_days(ctx, days):
+    from claimlens.models import Room
+
+    room = ctx.claim_facts.room
+    ctx.claim_facts = ctx.claim_facts.model_copy(
+        update={"room": Room(rate_per_day=room.rate_per_day if room else None, days=_fact(days, f"{days} days"))})
+    return _codes(check_story(ctx), "room_days_exceed_stay")
+
+
+def test_room_days_exceed_stay(ctx):
+    from claimlens.pipeline.rules import stay_nights
+
+    assert stay_nights(ctx.claim_facts) == 3
+    [f] = _room_days(ctx, 6)
+    assert f.severity == "high" and f.citations[0].quote == "6 days"
+
+
+def test_room_days_within_tolerance(ctx):
+    assert _room_days(ctx, 4) == []
+
+
+def test_room_days_ignored_when_dates_inverted(ctx):
+    ctx.claim_facts.discharge_date = ctx.claim_facts.discharge_date.model_copy(update={"value": "05-Mar-2026"})
+    assert _room_days(ctx, 9) == []
+
+
+def test_room_days_summed_over_room_and_icu_lines(ctx):
+    from claimlens.models import Bill, LineItem
+
+    bill = Bill(page=3, kind="hospital", inpatient=True, line_items=[
+        LineItem(desc="Room", category="room", days=_fact(2), amount=_fact(2000)),
+        LineItem(desc="ICU", category="icu", days=_fact(3), amount=_fact(9000))])
+    _set_bills(ctx, [bill])
+    [f] = _codes(check_story(ctx), "room_days_exceed_stay")
+    assert f.severity == "high"
+
+
+def _two_lines(ctx, dates, desc="CBC test", amount=450, same_bill=True):
+    from claimlens.models import Bill, LineItem
+
+    def line():
+        return LineItem(desc=desc, amount=_fact(amount, f"Rs {amount}"))
+
+    def bill(d):
+        return Bill(page=3, kind="hospital", date=_fact(d) if d else None, line_items=[line()])
+
+    if same_bill:
+        b = bill(dates[0])
+        b.line_items.append(line())
+        _set_bills(ctx, [b])
+    else:
+        _set_bills(ctx, [bill(d) for d in dates])
+    return _codes(check_story(ctx), "duplicate_charge")
+
+
+def test_duplicate_charge_same_day(ctx):
+    [f] = _two_lines(ctx, ["12-Mar-2026"])
+    assert f.severity == "medium" and f.citations[0].quote == "Rs 450"
+
+
+def test_same_item_different_days_not_duplicate(ctx):
+    assert _two_lines(ctx, ["12-Mar-2026", "13-Mar-2026"], "Paracetamol", 120, same_bill=False) == []
+
+
+def test_duplicate_across_bills_same_day(ctx):
+    assert len(_two_lines(ctx, ["12-Mar-2026", "12-Mar-2026"], "Paracetamol", 120, same_bill=False)) == 1
+
+
+def test_no_date_never_duplicate(ctx):
+    assert _two_lines(ctx, [None]) == []
+
+
+def test_icu_room_line_days_counted_once(ctx):
+    from claimlens.models import Bill, LineItem
+
+    _set_bills(ctx, [Bill(page=3, kind="hospital", inpatient=True, line_items=[
+        LineItem(desc="ICU Room Charges", days=_fact(3), amount=_fact(9000))])])
+    assert _codes(check_story(ctx), "room_days_exceed_stay") == []

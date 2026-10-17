@@ -1,6 +1,6 @@
 """Score every detector on the forensics test set, per field, and the metrics that decide what ships.
 
-python -m eval.forensics.score [--gemini] [--catnet <folder of .npy>]
+python -m eval.forensics.score [--gemini]
 """
 
 import argparse
@@ -9,7 +9,6 @@ import logging
 import time
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 from claimlens.pipeline.forensics.base import field_score, safe_heatmap
@@ -117,7 +116,7 @@ def fused(rows: list[dict], detectors: list[str]) -> list[dict]:
     return out
 
 
-def score_set(set_dir: Path, gemini=None, catnet_dir: Path | None = None) -> list[dict]:
+def score_set(set_dir: Path, gemini=None) -> list[dict]:
     """Run every detector on every image of the manifest; one row per (image, field, detector)."""
     detectors = [ELA, NOISE, DQ, COPYMOVE, CHARS] + ([gemini] if gemini else [])
     rows = []
@@ -132,13 +131,6 @@ def score_set(set_dir: Path, gemini=None, catnet_dir: Path | None = None) -> lis
         for d in detectors:
             started = time.time()
             heats[d.name] = (safe_heatmap(d, img, info, words), time.time() - started)
-        npy = catnet_dir / (Path(entry["image"]).stem + ".npy") if catnet_dir else None
-        if npy is not None:
-            heat = None
-            if npy.is_file():
-                heat = cv2.resize(np.load(npy).astype(np.float32), (img.shape[1], img.shape[0]))
-            took = catnet_dir / (Path(entry["image"]).stem + ".time")
-            heats["catnet"] = (heat, float(took.read_text()) if took.is_file() else None)
         for f, (box, _) in zip(entry["fields"], words):
             if f["kind"] == "text":
                 continue
@@ -154,13 +146,12 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     ap = argparse.ArgumentParser()
     ap.add_argument("--gemini", action="store_true")
-    ap.add_argument("--catnet", type=Path)
     args = ap.parse_args()
     gemini = None
     if args.gemini:
         from claimlens.pipeline.forensics.gemini_closeup import GeminiCloseup, GeminiVision
 
         gemini = GeminiCloseup(GeminiVision("social-pulse-510513"), cache_dir=SET / "closeup-cache")
-    results = score_set(SET, gemini, args.catnet)
+    results = score_set(SET, gemini)
     (SET / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in results))
     print(f"{len(results)} rows -> {SET / 'results.jsonl'}")
