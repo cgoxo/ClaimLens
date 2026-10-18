@@ -2,7 +2,7 @@
 export const SCENES = [
   { id: "hook", seconds: 12 },
   { id: "why", seconds: 20 },
-  { id: "problem", seconds: 19 },
+  { id: "problem", seconds: 18 },
   { id: "upload", seconds: 26 },
   { id: "results", seconds: 33 },
   { id: "proof", seconds: 16 },

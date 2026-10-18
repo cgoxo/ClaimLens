@@ -6,6 +6,6 @@ import path from "node:path";
 const serveUrl = await bundle({ entryPoint: path.resolve("src/index.ts") });
 const composition = await selectComposition({ serveUrl, id: "ClaimLensDemo" });
 for (const f of process.argv.slice(2).map(Number)) {
-  await renderStill({ serveUrl, composition, frame: f, output: `out/stills/f${String(f).padStart(4, "0")}.png`, scale: 0.5 });
+  await renderStill({ serveUrl, composition, frame: f, output: `${process.env.OUT ?? "out/stills"}/f${String(f).padStart(4, "0")}.png`, scale: 0.5 });
   console.log("frame", f);
 }

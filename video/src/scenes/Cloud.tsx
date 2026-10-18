@@ -86,6 +86,24 @@ export const Cloud: React.FC = () => {
       <Paper />
       <Kicker color={C.gBlue}>Built on Google Cloud · Mumbai region</Kicker>
 
+      {/* opening title, while the narration says where it runs; it hands over to the diagram */}
+      {(() => {
+        const o = Math.min(prog(t, 0.2, 0.5), 1 - prog(t, T.auth - 0.6, 0.4));
+        if (o <= 0) return null;
+        return (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 26, opacity: o, transform: `scale(${0.96 + 0.04 * prog(t, 0.2, 0.8)})` }}>
+            <div style={{ display: "flex", gap: 16 }}>
+              {[C.gBlue, C.gRed, C.gYellow, C.gGreen].map((c, i) => (
+                <div key={c} style={{ width: 26, height: 26, borderRadius: 13, background: c, opacity: prog(t, 0.3 + i * 0.12, 0.3) }} />
+              ))}
+            </div>
+            <div style={{ fontFamily: F.display, fontWeight: 600, fontSize: 120, color: C.ink, lineHeight: 1 }}>Google Cloud</div>
+            <div style={{ fontFamily: F.mono, fontSize: 32, color: C.inkSoft, opacity: prog(t, 1.0, 0.5) }}>Mumbai region · asia-south1</div>
+          </div>
+        );
+      })()}
+
       <svg style={{ position: "absolute", inset: 0 }} width={1920} height={1080}>
         {LINKS.map(([a, b, at]) => {
           const p = prog(t, at, 0.6);

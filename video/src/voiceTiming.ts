@@ -52,19 +52,19 @@ export const VOICE_LINES: Record<string, VoiceLine[]> = {
       "text": "No reviewer can check every page.",
       "file": "voice/problem/1.wav",
       "from": 6.4,
-      "to": 9.46
+      "to": 9.22
     },
     {
       "text": "So we built ClaimLens.",
       "file": "voice/problem/2.wav",
-      "from": 9.91,
-      "to": 12.13
+      "from": 9.67,
+      "to": 11.75
     },
     {
       "text": "Gemini reads. Code decides. Every claim is proved.",
       "file": "voice/problem/3.wav",
-      "from": 12.58,
-      "to": 16.84
+      "from": 12.2,
+      "to": 16.46
     }
   ],
   "upload": [
@@ -84,13 +84,13 @@ export const VOICE_LINES: Record<string, VoiceLine[]> = {
       "text": "It confirms these are real insurance documents, then Gemini extracts the facts.",
       "file": "voice/upload/2.wav",
       "from": 15.21,
-      "to": 21.65
+      "to": 20.97
     },
     {
       "text": "In under a minute, the case file is ready.",
       "file": "voice/upload/3.wav",
-      "from": 22.1,
-      "to": 24.68
+      "from": 21.42,
+      "to": 24
     }
   ],
   "results": [

@@ -82,10 +82,28 @@ function writeWav(file, x, rate) {
   fs.writeFileSync(file, buf);
 }
 
+// stumbles to remove from a take, as [from, to] seconds: recordings/edits.json, e.g. { "upload": [[14.71, 15.4]] }
+const EDITS = fs.existsSync("recordings/edits.json") ? JSON.parse(fs.readFileSync("recordings/edits.json", "utf8")) : {};
+
+/** The take with each [from, to] range taken out, joined with a 10 ms crossfade */
+function removeCuts({ x, rate }, cuts) {
+  if (rate !== 44100) throw new Error("recordings must be converted to 44.1 kHz");
+  const fade = Math.round(0.01 * rate);
+  for (const [a, b] of [...cuts].sort((p, q) => q[0] - p[0])) {
+    const i = Math.round(a * rate), j = Math.round(b * rate);
+    const out = new Float32Array(x.length - (j - i));
+    out.set(x.subarray(0, i));
+    for (let k = 0; k < fade && i + k < out.length; k++) out[i + k] = x[i + k] * (1 - k / fade) + x[j + k] * (k / fade);
+    out.set(x.subarray(j + fade), i + fade);
+    x = out;
+  }
+  return x;
+}
+
 fs.rmSync("public/voice", { recursive: true, force: true });
 const timing = {}, needed = {};
 for (const s of scenes) {
-  const { x, rate } = load(`recordings/wav/${s.id}.wav`);
+  const x = removeCuts(load(`recordings/wav/${s.id}.wav`), EDITS[s.id] ?? []), rate = 44100;
   const env = frames(x, rate, MS);
   const sorted = [...env].sort((a, b) => a - b);
   const threshold = Math.max(sorted[Math.floor(sorted.length * 0.1)] * 4, sorted[Math.floor(sorted.length * 0.9)] * 0.12);
