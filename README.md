@@ -28,4 +28,8 @@ severity, add a finding, correct a fact) are only proposals: nothing changes unt
 **Deploy:** pushing to `main` runs `.github/workflows/ci-deploy.yml`: backend tests, frontend tests and build, then
 deploy to Cloud Run (`claimlens-api`, project `social-pulse-510513`) with keyless Workload Identity auth.
 
+**Demo:** https://drive.google.com/drive/folders/1WUnoVbFCdQV431f3_eyd7tqFHpotgxdP?dmr=1&ec=wgc-drive-%5Bmodule%5D-goto
+
+**Ppt:** https://docs.google.com/presentation/d/1V358p4Pk_TmKnrJMQ5iBQaxEpdmkOtT7nkay4_aFMrs/edit?slide=id.h382133c27f54ffd0_4_86#slide=id.h382133c27f54ffd0_4_86
+
 The sample PDFs in `backend/samples/` are fictional: no real person, hospital or policy.
