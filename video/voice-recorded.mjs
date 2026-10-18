@@ -28,7 +28,7 @@ const words = (s) => s.split(/\s+/).filter(Boolean).reduce((n, w) => {
 }, 0);
 
 /** Times to cut a take into `lines.length` parts */
-function cuts(env, segs, lines) {
+function cuts(env, segs, lines, threshold) {
   const start = segs[0][0], end = segs.at(-1)[1];
   // speaking time only, so pauses don't skew where each line should fall
   const speakingBefore = (t) => segs.reduce((n, [a, b]) => n + Math.max(0, Math.min(b, t) - a), 0);
@@ -39,10 +39,12 @@ function cuts(env, segs, lines) {
 
   // candidates: every pause (preferred), and quiet moments inside speech (a small penalty)
   const cand = [];
-  // the readers paused about a second between lines, so a long pause is more likely a line break than a comma
-  for (let i = 1; i < segs.length; i++) {
-    const len = segs[i][0] - segs[i - 1][1];
-    cand.push({ t: (segs[i - 1][1] + segs[i][0]) / 2, penalty: 0.006 * Math.max(0, 1 - len / 1.2) });
+  // the readers paused about a second between lines, so a long pause is more likely a line break than a comma;
+  // shorter pauses (from 0.25 s) count too, so a quick line change is still cut in silence, not inside a word
+  const pauses = segments(env, MS, threshold, 0.25, 0.04);
+  for (let i = 1; i < pauses.length; i++) {
+    const len = pauses[i][0] - pauses[i - 1][1];
+    cand.push({ t: (pauses[i - 1][1] + pauses[i][0]) / 2, penalty: 0.006 * Math.max(0, 1 - len / 1.2) });
   }
   segs.forEach(([a, b]) => {
     for (let t = a + 0.4; t < b - 0.4; t += STEP) {
@@ -69,7 +71,7 @@ function cuts(env, segs, lines) {
   let j = best[K - 1].indexOf(Math.min(...best[K - 1]));
   const out = [];
   for (let k = K - 1; k >= 0; k--) { out.unshift(cand[j].t); j = from[k][j]; }
-  return [start, ...out, end];
+  return [Math.max(0, start - PAD_IN), ...out, end + PAD_OUT]; // the outer edges keep their padding
 }
 
 function writeWav(file, x, rate) {
@@ -85,10 +87,10 @@ function writeWav(file, x, rate) {
 // stumbles to remove from a take, as [from, to] seconds: recordings/edits.json, e.g. { "upload": [[14.71, 15.4]] }
 const EDITS = fs.existsSync("recordings/edits.json") ? JSON.parse(fs.readFileSync("recordings/edits.json", "utf8")) : {};
 
-/** The take with each [from, to] range taken out, joined with a 10 ms crossfade */
+/** The take with each [from, to] range taken out, joined with a 30 ms crossfade so the join can't click */
 function removeCuts({ x, rate }, cuts) {
   if (rate !== 44100) throw new Error("recordings must be converted to 44.1 kHz");
-  const fade = Math.round(0.01 * rate);
+  const fade = Math.round(0.03 * rate);
   for (const [a, b] of [...cuts].sort((p, q) => q[0] - p[0])) {
     const i = Math.round(a * rate), j = Math.round(b * rate);
     const out = new Float32Array(x.length - (j - i));
@@ -108,7 +110,7 @@ for (const s of scenes) {
   const sorted = [...env].sort((a, b) => a - b);
   const threshold = Math.max(sorted[Math.floor(sorted.length * 0.1)] * 4, sorted[Math.floor(sorted.length * 0.9)] * 0.12);
   const segs = segments(env, MS, threshold);
-  const edges = cuts(env, segs, s.lines);
+  const edges = cuts(env, segs, s.lines, threshold);
   // trim each piece to its own speech, so silence at a cut isn't counted as part of a line
   const speechIn = (a, b) => {
     const inside = segs.map(([p, q]) => [Math.max(p, a), Math.min(q, b)]).filter(([p, q]) => q - p > 0.05);
@@ -119,7 +121,8 @@ for (const s of scenes) {
   let at = LEAD;
   timing[s.id] = s.lines.map((l, i) => {
     const [a, b] = speechIn(edges[i], edges[i + 1]);
-    const from = Math.max(0, Math.round((a - PAD_IN) * rate)), to = Math.min(x.length, Math.round((b + PAD_OUT) * rate));
+    // padding never reaches past the cut, so no sound ends up in two clips
+    const from = Math.round(Math.max(edges[i], a - PAD_IN) * rate), to = Math.round(Math.min(edges[i + 1], b + PAD_OUT) * rate);
     const clip = x.slice(from, to);
     const fade = Math.round(0.012 * rate);
     for (let k = 0; k < fade; k++) { clip[k] *= k / fade; clip[clip.length - 1 - k] *= k / fade; }

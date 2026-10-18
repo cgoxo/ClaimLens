@@ -52,19 +52,19 @@ export const VOICE_LINES: Record<string, VoiceLine[]> = {
       "text": "No reviewer can check every page.",
       "file": "voice/problem/1.wav",
       "from": 6.4,
-      "to": 9.22
+      "to": 8.99
     },
     {
       "text": "So we built ClaimLens.",
       "file": "voice/problem/2.wav",
-      "from": 9.67,
-      "to": 11.75
+      "from": 9.44,
+      "to": 11.91
     },
     {
       "text": "Gemini reads. Code decides. Every claim is proved.",
       "file": "voice/problem/3.wav",
-      "from": 12.2,
-      "to": 16.46
+      "from": 12.36,
+      "to": 16.62
     }
   ],
   "upload": [
@@ -122,13 +122,13 @@ export const VOICE_LINES: Record<string, VoiceLine[]> = {
       "text": "The policy becomes a rulebook. A waiting period applies, line by line.",
       "file": "voice/results/4.wav",
       "from": 24.31,
-      "to": 29.79
+      "to": 29.53
     },
     {
       "text": "Payable: zero.",
       "file": "voice/results/5.wav",
-      "from": 30.24,
-      "to": 31.38
+      "from": 29.98,
+      "to": 31.16
     }
   ],
   "proof": [
@@ -136,13 +136,13 @@ export const VOICE_LINES: Record<string, VoiceLine[]> = {
       "text": "AI can make things up. So every fact must quote its page.",
       "file": "voice/proof/0.wav",
       "from": 0.45,
-      "to": 5.57
+      "to": 5.5
     },
     {
       "text": "No quote, no finding.",
       "file": "voice/proof/1.wav",
-      "from": 6.02,
-      "to": 8.2
+      "from": 5.95,
+      "to": 7.98
     },
     {
       "text": "A different number, or a missing \"not\", never passes.",
