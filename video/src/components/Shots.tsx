@@ -9,7 +9,7 @@ export type Shot = { src: string; from: number; to: number; keys?: Key[]; boxes?
  *  Times on each shot's keys, boxes and cursor are relative to that shot's start. */
 export const Shots: React.FC<{ shots: Shot[] }> = ({ shots }) => {
   const { t } = useT();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   return (
     <>
       {shots.map((s, i) => {
@@ -17,7 +17,9 @@ export const Shots: React.FC<{ shots: Shot[] }> = ({ shots }) => {
         const last = i === shots.length - 1;
         const fadeOut = last ? 1 : 1 - prog(t, s.to, 0.3);
         return (
-          <Sequence key={s.src + i} from={Math.round(s.from * fps)} durationInFrames={Math.round((s.to - s.from + 0.3) * fps)} layout="none">
+          // the last shot holds until the scene ends, however long the narration makes it
+          <Sequence key={s.src + i} from={Math.round(s.from * fps)}
+            durationInFrames={last ? durationInFrames - Math.round(s.from * fps) : Math.round((s.to - s.from + 0.3) * fps)} layout="none">
             <AbsoluteFill style={{ opacity: Math.min(fadeIn, fadeOut) }}>
               <BrowserShot src={s.src} keys={s.keys} boxes={s.boxes} cursor={s.cursor} cropTop={s.cropTop} enterAt={i === 0 ? 0 : -10} />
             </AbsoluteFill>

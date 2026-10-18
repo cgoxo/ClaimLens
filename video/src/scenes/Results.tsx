@@ -5,7 +5,7 @@ import { Captions, Paper, Scene } from "../components/ui";
 import { Shots } from "../components/Shots";
 
 const FULL = { x: 735, y: 372, zoom: 1 };
-const END = 33;
+const END = 33; // the scene length in timeline.ts
 
 // Each shot starts as the narration reaches it (see cues.ts); the numbers are fallbacks without a voiceover
 const T_FACTS = cue("results", "Every fact", 5.3) - 0.3;
