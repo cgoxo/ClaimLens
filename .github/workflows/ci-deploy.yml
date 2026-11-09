@@ -1,10 +1,10 @@
 name: CI and deploy
 
+# Disabled: the GCP project behind this pipeline has been removed.
+# Automatic runs on push and pull_request are turned off; the workflow can
+# still be started by hand from the Actions tab (workflow_dispatch).
+# To re-enable, restore the push and pull_request triggers below.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 env:
@@ -57,7 +57,8 @@ jobs:
   deploy:
     name: Deploy to Cloud Run
     needs: [backend, frontend]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Disabled: the GCP target no longer exists, so this job never runs.
+    if: false
     runs-on: ubuntu-latest
     concurrency: deploy-production
     permissions:
